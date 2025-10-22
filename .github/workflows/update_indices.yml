@@ -27,10 +27,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install deps (pinned)
         run: |
-          python -m pip install --upgrade pip
-          pip install polars pyarrow yfinance gspread gspread-dataframe pandas google-auth pmdarima numpy
+          python -m pip install --upgrade pip wheel setuptools
+          pip install numpy==1.26.4 scipy==1.11.4
+          pip install pandas==2.2.2 polars==1.6.0 pyarrow==16.1.0 yfinance==0.2.43 \
+                      gspread==6.1.2 gspread-dataframe==3.3.1 google-auth==2.35.0
+          pip install pmdarima==2.0.4
+
 
       # Prepara credenciales de Google de forma robusta (sin evaluar el secreto directo en el if)
       - name: Prepare Google credentials

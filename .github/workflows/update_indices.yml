@@ -6,13 +6,12 @@ on:
     - cron: "0 11 * * *"
   workflow_dispatch:
 
-# Evita que se ejecuten en paralelo dos corridas del mismo flujo en la misma rama
 concurrency:
   group: indices-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read   # mínimo necesario para checkout
+  contents: read
 
 jobs:
   run:
@@ -33,33 +32,53 @@ jobs:
           python -m pip install --upgrade pip
           pip install polars pyarrow yfinance gspread gspread-dataframe pandas google-auth pmdarima numpy
 
-      # Comprobación explícita para saber si el secreto llega al runner
-      - name: Check secret presence
+      # Prepara credenciales de Google de forma robusta (sin evaluar el secreto directo en el if)
+      - name: Prepare Google credentials
+        shell: bash
+        env:
+          SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SA_B64:  ${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" ] || [ -n "${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}" ]; then
-            echo "Secret presente (contenido oculto)."
+          set -euo pipefail
+          if [[ -n "${SA_JSON:-}" ]]; then
+            # JSON crudo en el secreto
+            printf '%s' "${SA_JSON}" > creds.json
+          elif [[ -n "${SA_B64:-}" ]]; then
+            # JSON en Base64 en el secreto
+            printf '%s' "${SA_B64}" | base64 -d > creds.json
           else
             echo "Falta definir GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo) o GCP_SERVICE_ACCOUNT_JSON_B64 (Base64)." >&2
             exit 1
           fi
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> "$GITHUB_ENV"
 
-      - name: Prepare Google credentials
-        shell: bash
+      # Sanity check: escribe una marca en la hoja "indices" para validar permisos y API
+      - name: Sanity check · write A1 on "indices"
+        env:
+          SHEET_ID: 1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0
         run: |
-          set -euo pipefail
-          if [ -n "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" ]; then
-            # JSON crudo pegado en el secreto
-            echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" > creds.json
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> "$GITHUB_ENV"
-          elif [ -n "${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}" ]; then
-            # JSON en Base64
-            echo "${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}" | base64 -d > creds.json
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> "$GITHUB_ENV"
-          else
-            echo "Falta definir GOOGLE_SERVICE_ACCOUNT_JSON o GCP_SERVICE_ACCOUNT_JSON_B64" >&2
-            exit 1
-          fi
+          python - << 'PY'
+          import os, sys, gspread
+          from google.oauth2.service_account import Credentials
+          sheet_id = os.environ["SHEET_ID"]
+          creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+          if not creds_path or not os.path.exists(creds_path):
+              sys.stderr.write("No se encontró GOOGLE_APPLICATION_CREDENTIALS\n")
+              sys.exit(1)
+          scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+          creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
+          gc = gspread.authorize(creds)
+          sh = gc.open_by_key(sheet_id)
+          try:
+              ws = sh.worksheet("indices")
+          except gspread.WorksheetNotFound:
+              ws = sh.add_worksheet(title="indices", rows=50, cols=10)
+          ws.update_acell("A1", "BOL")
+          ws.update_acell("B1", "marca de diagnóstico")
+          print("OK: se escribió en A1:B1 de la hoja 'indices'")
+          PY
 
       - name: Run pipeline (fetch + forecast)
         run: |
+          set -euo pipefail
           python fetch_and_forecast_indices_to_gsheet.py

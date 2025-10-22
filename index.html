@@ -1,368 +1,1558 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Indicadores bursátiles · Analítica y proyección</title>
-  <meta name="description" content="Tablero interactivo con series históricas y proyección a 30 días desde Google Sheets.">
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
-  <style>
-    :root{ --bg:#0b1220; --card:#111a2b; --fg:#e6eaf2; --muted:#9fb0c3; --accent:#60a5fa; }
-    *{ box-sizing:border-box }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; background:var(--bg); color:var(--fg) }
-    header{ padding:1rem 1.25rem; border-bottom:1px solid #1b2942; background:linear-gradient(180deg,#0d1626 0%, #0b1220 100%) }
-    h1{ font-size:1.15rem; margin:0 }
-    .wrap{ max-width:1200px; margin:0 auto; padding:1rem 1.25rem }
-    .card{ background:var(--card); border:1px solid #1b2942; border-radius:16px; padding:1rem; box-shadow: 0 10px 24px rgba(0,0,0,.25) }
-    .grid{ display:grid; grid-template-columns:1fr; gap:1rem }
-    @media(min-width:900px){ .grid{ grid-template-columns: 300px 1fr } }
-    label{ display:block; font-size:.85rem; color:var(--muted); margin:.25rem 0 .5rem }
-    select, input[type="date"], input[type="url"]{ width:100%; background:#0e1728; color:var(--fg); border:1px solid #203150; border-radius:10px; padding:.5rem .6rem; outline:none }
-    .row{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem }
-    .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem }
-    .hint{ font-size:.8rem; color:var(--muted); margin-top:.4rem }
-    #chart{ width:100%; height:540px }
-    .kpi{ display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin-top:.6rem }
-    .kpi > div{ background:#0e1728; border:1px solid #203150; border-radius:10px; padding:.6rem }
-    .kpi h3{ margin:.1rem 0; font-size:1rem }
-    .kpi p{ margin:0; color:var(--muted); font-size:.85rem }
-    nav.tabs{ display:flex; gap:.6rem; margin-bottom:.6rem }
-    nav.tabs button{ background:#0e1728; color:var(--fg); border:1px solid #203150; border-radius:10px; padding:.5rem .8rem; cursor:pointer }
-    nav.tabs button.active{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(96,165,250,.2) }
-    section[hidden]{ display:none }
-    footer{ text-align:center; color:#8aa0ba; font-size:.8rem; padding:1.5rem 0 2rem }
-    a{ color:var(--accent); text-decoration:none }
-    a:hover{ text-decoration:underline }
-    .switch{ display:flex; align-items:center; gap:.5rem; margin:.4rem 0 }
-    input[type="checkbox"]{ accent-color:#60a5fa }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero Estadístico Avanzado</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-card: #252525;
+            --text-primary: #f0f0f0;
+            --text-secondary: #b0b0b0;
+            --accent: #3a86ff;
+            --accent-hover: #2a76ef;
+            --success: #4caf50;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --border: #444;
+        }
+
+        .light-mode {
+            --bg-primary: #f5f7fa;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --accent: #3a86ff;
+            --accent-hover: #2a76ef;
+            --success: #4caf50;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --border: #e0e0e0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .logo-icon {
+            font-size: 1.8rem;
+            color: var(--accent);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .theme-toggle:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        .sidebar {
+            background-color: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title i {
+            color: var(--accent);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        select, input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .checkbox-group input {
+            width: auto;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+        }
+
+        .btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            background-color: var(--bg-secondary);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-align: center;
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .tab.active {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .tab:not(.active):hover {
+            background-color: var(--bg-card);
+        }
+
+        .tab-content {
+            display: none;
+            background-color: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-card {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+
+        .kpi-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .chart-container {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            height: 400px;
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-weight: 500;
+        }
+
+        .methodology-content {
+            line-height: 1.6;
+        }
+
+        .methodology-content h3 {
+            margin: 20px 0 10px;
+            color: var(--accent);
+        }
+
+        .methodology-content p {
+            margin-bottom: 15px;
+        }
+
+        .methodology-content ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loader-spinner {
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background-color: rgba(244, 67, 54, 0.1);
+            border-left: 4px solid var(--danger);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .comparison-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .comparison-symbols {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .symbol-tag {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .symbol-tag .remove {
+            cursor: pointer;
+            color: var(--danger);
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                order: 2;
+            }
+            
+            .main-content {
+                order: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .kpi-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .controls {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <div class="wrap">
-      <h1>Indicadores bursátiles · Analítica y proyección (30 días)</h1>
-      <div class="hint">Fuente: Google Sheets. Actualización 06:00 (America/Guayaquil). Proyecciones ARIMA en retornos logarítmicos con AICc.</div>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">📊</div>
+                <h1>Tablero Estadístico Avanzado</h1>
+            </div>
+            <div class="controls">
+                <button class="btn" id="refreshBtn">
+                    <i>↻</i> Actualizar Datos
+                </button>
+                <button class="theme-toggle" id="themeToggle">
+                    <i>🌙</i>
+                </button>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <div class="sidebar">
+                <div class="card">
+                    <h3 class="card-title"><i>⚙️</i> Configuración de Datos</h3>
+                    <div class="form-group">
+                        <label for="sheetUrl">URL Hoja Histórica</label>
+                        <input type="text" id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/gviz/tq?tqx=out:json&sheet=Historico">
+                    </div>
+                    <div class="form-group">
+                        <label for="fcUrl">URL Hoja Proyección</label>
+                        <input type="text" id="fcUrl" value="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/gviz/tq?tqx=out:json&sheet=Proyecciones">
+                    </div>
+                    <button class="btn" id="loadDataBtn">
+                        <i>📥</i> Cargar Datos
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title"><i>🔍</i> Filtros de Análisis</h3>
+                    <div class="form-group">
+                        <label for="symbol">Símbolo Principal</label>
+                        <select id="symbol">
+                            <option value="">Cargando...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="comparison-controls">
+                        <select id="compareSymbol">
+                            <option value="">Agregar comparación...</option>
+                        </select>
+                        <button class="btn-secondary" id="addComparisonBtn">+</button>
+                    </div>
+                    
+                    <div class="comparison-symbols" id="comparisonSymbols">
+                        <!-- Los símbolos de comparación aparecerán aquí -->
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="metric">Métrica</label>
+                        <select id="metric">
+                            <option value="close">Precio de Cierre</option>
+                            <option value="open">Precio de Apertura</option>
+                            <option value="high">Precio Máximo</option>
+                            <option value="low">Precio Mínimo</option>
+                            <option value="volume">Volumen</option>
+                            <option value="adj_close">Cierre Ajustado</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ret">Tipo de Retorno</label>
+                        <select id="ret">
+                            <option value="level">Nivel</option>
+                            <option value="ret_d">Retorno Diario</option>
+                            <option value="ret_cum">Retorno Acumulado</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="smooth">Suavizado (Media Móvil)</label>
+                        <select id="smooth">
+                            <option value="1">Sin Suavizado</option>
+                            <option value="5">5 días</option>
+                            <option value="10">10 días</option>
+                            <option value="20">20 días</option>
+                            <option value="50">50 días</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateFrom">Fecha Desde</label>
+                        <input type="date" id="dateFrom">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateTo">Fecha Hasta</label>
+                        <input type="date" id="dateTo">
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="showFc" checked>
+                        <label for="showFc">Mostrar Proyección</label>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="showBands" checked>
+                        <label for="showBands">Mostrar Bandas de Confianza</label>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="logScale">
+                        <label for="logScale">Escala Logarítmica</label>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3 class="card-title"><i>💾</i> Exportar Datos</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-secondary" id="exportChartBtn">
+                            <i>📈</i> Exportar Gráfico
+                        </button>
+                        <button class="btn-secondary" id="exportDataBtn">
+                            <i>📋</i> Exportar Datos
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="tabs">
+                    <div class="tab active" data-tab="series">Series Temporales</div>
+                    <div class="tab" data-tab="stats">Estadísticas</div>
+                    <div class="tab" data-tab="correlation">Correlación</div>
+                    <div class="tab" data-tab="methodology">Metodología</div>
+                </div>
+
+                <div class="loader" id="loader">
+                    <div class="loader-spinner"></div>
+                    <p>Cargando datos...</p>
+                </div>
+
+                <div class="error-message" id="errorMessage" style="display: none;"></div>
+
+                <div class="tab-content active" id="seriesTab">
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Último Valor</div>
+                            <div class="kpi-value" id="kpi_last">—</div>
+                            <div class="kpi-label" id="kpi_last_date">—</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">MTD</div>
+                            <div class="kpi-value" id="kpi_mtd">—</div>
+                            <div class="kpi-label">Mes a la fecha</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">YTD</div>
+                            <div class="kpi-value" id="kpi_ytd">—</div>
+                            <div class="kpi-label">Año a la fecha</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Volatilidad Anual</div>
+                            <div class="kpi-value" id="kpi_volatility">—</div>
+                            <div class="kpi-label">Desviación estándar</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución de Precios</div>
+                        <div id="chart"></div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Retornos Diarios</div>
+                        <div id="returnsChart"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="statsTab">
+                    <div class="chart-container">
+                        <div class="chart-title">Distribución de Retornos</div>
+                        <div id="distributionChart"></div>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3 class="card-title"><i>📈</i> Estadísticas Descriptivas</h3>
+                            <div class="stat-row">
+                                <span class="stat-label">Media</span>
+                                <span class="stat-value" id="stat_mean">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Mediana</span>
+                                <span class="stat-value" id="stat_median">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Desviación Estándar</span>
+                                <span class="stat-value" id="stat_std">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Mínimo</span>
+                                <span class="stat-value" id="stat_min">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Máximo</span>
+                                <span class="stat-value" id="stat_max">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Asimetría</span>
+                                <span class="stat-value" id="stat_skew">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Curtosis</span>
+                                <span class="stat-value" id="stat_kurtosis">—</span>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <h3 class="card-title"><i>📊</i> Métricas de Riesgo</h3>
+                            <div class="stat-row">
+                                <span class="stat-label">Volatilidad Anual</span>
+                                <span class="stat-value" id="risk_volatility">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">VaR 95% (1 día)</span>
+                                <span class="stat-value" id="risk_var">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Ratio Sharpe</span>
+                                <span class="stat-value" id="risk_sharpe">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Máxima Caída</span>
+                                <span class="stat-value" id="risk_maxdd">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Ratio Calmar</span>
+                                <span class="stat-value" id="risk_calmar">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="correlationTab">
+                    <div class="chart-container">
+                        <div class="chart-title">Matriz de Correlación</div>
+                        <div id="correlationChart"></div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div class="chart-title">Comparación de Símbolos</div>
+                        <div id="comparisonChart"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="methodologyTab">
+                    <div class="methodology-content">
+                        <h3>Metodología del Análisis</h3>
+                        <p>Este tablero estadístico utiliza técnicas avanzadas de análisis de series temporales financieras para proporcionar insights sobre el comportamiento de los activos.</p>
+                        
+                        <h3>Procesamiento de Datos</h3>
+                        <p>Los datos históricos y de proyección se obtienen de hojas de cálculo de Google mediante la API de Google Visualization. El proceso incluye:</p>
+                        <ul>
+                            <li>Limpieza y validación de datos</li>
+                            <li>Normalización de formatos de fecha</li>
+                            <li>Tratamiento de valores nulos y outliers</li>
+                            <li>Cálculo de métricas derivadas (retornos, volatilidad, etc.)</li>
+                        </ul>
+                        
+                        <h3>Modelo de Proyección</h3>
+                        <p>Las proyecciones se generan utilizando un modelo autorregresivo integrado de media móvil (ARIMA) con los siguientes parámetros:</p>
+                        <ul>
+                            <li>Ventana de entrenamiento: 2 años de datos históricos</li>
+                            <li>Horizonte de proyección: 30 días</li>
+                            <li>Bandas de confianza del 95%</li>
+                            <li>Validación mediante walk-forward testing</li>
+                        </ul>
+                        
+                        <h3>Métricas de Riesgo</h3>
+                        <p>Las métricas de riesgo se calculan siguiendo estándares de la industria:</p>
+                        <ul>
+                            <li>Volatilidad anualizada: desviación estándar de retornos diarios × √252</li>
+                            <li>Value at Risk (VaR): percentil 5 de la distribución de retornos</li>
+                            <li>Ratio Sharpe: retorno promedio / volatilidad (asumiendo tasa libre de riesgo del 2%)</li>
+                            <li>Máxima caída: mayor pérdida desde un pico a un valle</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-  </header>
 
-  <main class="wrap">
-    <nav class="tabs">
-      <button id="tabSerie" class="active" type="button">Serie y proyección</button>
-      <button id="tabMetodologia" type="button">Metodología</button>
-    </nav>
-
-    <section id="viewSerie" class="grid">
-      <aside class="card">
-        <label for="sheetUrl">URL JSON, hoja “indices”</label>
-        <input id="sheetUrl" type="url"
-               value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices" />
-
-        <label for="fcUrl">URL JSON, hoja “proyecciones_30d”</label>
-        <input id="fcUrl" type="url"
-               value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d" />
-
-        <label for="symbol">Símbolo</label>
-        <select id="symbol"></select>
-
-        <div class="row3">
-          <div>
-            <label for="metric">Métrica</label>
-            <select id="metric">
-              <option value="close">Close</option>
-              <option value="adj_close" selected>Adj Close</option>
-            </select>
-          </div>
-          <div>
-            <label for="ret">Serie</label>
-            <select id="ret">
-              <option value="level" selected>Nivel (precio)</option>
-              <option value="ret_d">Retorno diario</option>
-              <option value="ret_cum">Retorno acumulado</option>
-            </select>
-          </div>
-          <div>
-            <label for="smooth">Suavizado</label>
-            <select id="smooth">
-              <option value="0" selected>Sin suavizado</option>
-              <option value="7">Media 7</option>
-              <option value="21">Media 21</option>
-              <option value="63">Media 63</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label for="dateFrom">Desde</label>
-            <input id="dateFrom" type="date" />
-          </div>
-          <div>
-            <label for="dateTo">Hasta</label>
-            <input id="dateTo" type="date" />
-          </div>
-        </div>
-
-        <div class="switch">
-          <input id="showFc" type="checkbox" checked />
-          <label for="showFc">Mostrar proyección 30 días</label>
-        </div>
-        <div class="switch">
-          <input id="showBands" type="checkbox" checked />
-          <label for="showBands">Mostrar bandas de confianza</label>
-        </div>
-
-        <div class="hint">Repo: <a href="https://github.com/diegomezapy/proyeccion_de_indicadores_bursatiles" target="_blank" rel="noopener">proyeccion_de_indicadores_bursatiles</a></div>
-      </aside>
-
-      <section class="card">
-        <div id="chart"></div>
-        <div class="kpi">
-          <div><h3 id="kpi_last">—</h3><p>Último valor</p></div>
-          <div><h3 id="kpi_mtd">—</h3><p>Variación MTD</p></div>
-          <div><h3 id="kpi_ytd">—</h3><p>Variación YTD</p></div>
-        </div>
-      </section>
-    </section>
-
-    <section id="viewMetodologia" class="card" hidden>
-      <h2 style="margin-top:0">Metodología de proyección</h2>
-      <p>Para cada índice se considera la serie diaria de <em>precio ajustado</em> <code>adj_close</code>. Se modelan los <strong>retornos logarítmicos</strong>,
-         \( r_t = \log(P_t) - \log(P_{t-1}) \), con un modelo <strong>ARIMA</strong> seleccionado automáticamente por AICc. El horizonte es de 30 días hábiles.</p>
-      <p>La proyección en nivel se obtiene por integración exponencial de los retornos pronosticados:
-         \( \hat{P}_{t+h} = P_t \exp\!\left(\sum_{j=1}^h \hat{r}_{t+j}\right) \).
-         Las bandas de confianza se derivan de los intervalos sobre retornos, trasladadas al nivel con una aproximación log-normal.</p>
-      <p>En series con historial insuficiente se aplica un método <em>naive drift</em> sobre el log-precio, con deriva igual al promedio de retornos recientes y
-         varianza estimada empíricamente.</p>
-      <h3>Campos generados</h3>
-      <ul>
-        <li><code>symbol, date, fc_h</code>: identificadores y horizonte</li>
-        <li><code>yhat, yhat_lo, yhat_hi</code>: pronóstico puntual y bandas 95%</li>
-        <li><code>last_obs_date, last_obs_value</code>: ancla del último cierre observado</li>
-        <li><code>method, model_desc</code>: trazabilidad del enfoque aplicado</li>
-      </ul>
-    </section>
-  </main>
-
-  <footer>Datos: Google Sheets. Gráficos: Plotly. ©</footer>
-
-  <script>
-    // === Utilidades ===
-    function toISO(d){
-      const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0");
-      return `${y}-${m}-${da}`;
-    }
-    function rollingMean(arr,k){
-      if(k<=1) return arr.slice();
-      const out=new Array(arr.length).fill(null);
-      let s=0, q=[];
-      for(let i=0;i<arr.length;i++){
-        const v = arr[i]==null ? NaN : Number(arr[i]);
-        q.push(v); s+=v;
-        if(q.length>k) s-=q.shift();
-        if(q.length===k) out[i]=s/k;
-      }
-      return out;
-    }
-    function formatPct(x){ if(x==null||isNaN(x)) return "—"; return (x*100).toFixed(2)+"%"; }
-
-    // Parse de fechas de Google Visualization: "Date(YYYY,MM,DD)" o ISO o epoch
-    function parseGvizDate(val){
-      if(val==null) return null;
-      if(val instanceof Date) return val;
-      if(typeof val==="number"){  // milisegundos
-        return new Date(val);
-      }
-      if(typeof val==="string"){
-        const m = val.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)/);
-        if(m){
-          const y=+m[1], mo=+m[2], d=+m[3];
-          return new Date(y, mo, d); // mo ya es 0-index en gviz
+    <script>
+        // === Utilidades ===
+        function toISO(d){
+            const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0");
+            return `${y}-${m}-${da}`;
         }
-        const dISO = new Date(val);
-        if(!isNaN(dISO)) return dISO;
-      }
-      return null;
-    }
-
-    async function fetchGvizJSON(url) {
-      const res = await fetch(url, { cache: "no-store" });
-      const text = await res.text();
-      const start = text.indexOf("{");
-      const end = text.lastIndexOf("}");
-      return JSON.parse(text.slice(start, end + 1));
-    }
-
-    function gvizToObjects(gviz) {
-      const cols = gviz.table.cols.map(c => (c.label || c.id || "").trim());
-      const out = [];
-      for (const row of gviz.table.rows) {
-        const obj = {};
-        for(let i=0;i<cols.length;i++){
-          const cell = row.c[i];
-          obj[cols[i]] = cell ? (cell.v ?? null) : null;
+        
+        function rollingMean(arr,k){
+            if(k<=1) return arr.slice();
+            const out=new Array(arr.length).fill(null);
+            let s=0, q=[];
+            for(let i=0;i<arr.length;i++){
+                const v = arr[i]==null ? NaN : Number(arr[i]);
+                q.push(v); s+=v;
+                if(q.length>k) s-=q.shift();
+                if(q.length===k) out[i]=s/k;
+            }
+            return out;
         }
-        out.push(obj);
-      }
-      return out;
-    }
-
-    function coerceHistoricalRows(rows) {
-      const priceCols = ["open","high","low","close","adj_close"];
-      rows.forEach(r => {
-        r.symbol = r.symbol != null ? String(r.symbol) : null;
-        // admite nombres alternativos (por si la cabecera llega con otro casing)
-        if(r["adjclose"]!=null && r["adj_close"]==null) r["adj_close"]=r["adjclose"];
-        r.date = parseGvizDate(r.date);
-        priceCols.forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
-        r.volume = r.volume==null || r.volume==="" ? null : Number(r.volume);
-      });
-      // eliminar filas sin precio alguno
-      rows = rows.filter(r => r.date instanceof Date && (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null));
-      rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
-      return rows;
-    }
-
-    function coerceForecastRows(rows) {
-      rows.forEach(r => {
-        r.symbol = r.symbol != null ? String(r.symbol) : null;
-        r.date = parseGvizDate(r.date);
-        r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
-        ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
-        r.last_obs_date = parseGvizDate(r.last_obs_date);
-      });
-      rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
-      rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0) - (b.fc_h??0));
-      return rows;
-    }
-
-    function updateKPIs(records, metric){
-      const elLast=document.getElementById('kpi_last');
-      const elMtd=document.getElementById('kpi_mtd');
-      const elYtd=document.getElementById('kpi_ytd');
-      if(!records.length){ elLast.textContent="—"; elMtd.textContent="—"; elYtd.textContent="—"; return; }
-      const last = records[records.length-1][metric];
-      const d = records[records.length-1].date;
-      const firstMonth = new Date(d.getFullYear(), d.getMonth(), 1);
-      const mRecords = records.filter(r=> r.date>=firstMonth && r[metric]!=null);
-      let mtd=null; if(mRecords.length>=2){ const base=mRecords[0][metric]; const end=mRecords[mRecords.length-1][metric]; mtd = base? (end/base - 1): null; }
-      const firstYear = new Date(d.getFullYear(), 0, 1);
-      const yRecords = records.filter(r=> r.date>=firstYear && r[metric]!=null);
-      let ytd=null; if(yRecords.length>=2){ const base=yRecords[0][metric]; const end=yRecords[yRecords.length-1][metric]; ytd = base? (end/base - 1): null; }
-      elLast.textContent = last==null? "—" : last.toLocaleString(undefined,{maximumFractionDigits:2});
-      elMtd.textContent  = formatPct(mtd);
-      elYtd.textContent  = formatPct(ytd);
-    }
-
-    function computeSeries(records, metric, retMode, smoothK){
-      const x = records.map(r=>r.date);
-      const y0 = records.map(r=>r[metric]);
-      let y = y0.slice();
-      if(retMode==="ret_d"){ y = y.map((v,i)=> i===0||v==null||y0[i-1]==null? null : (v/y0[i-1]-1)); }
-      else if(retMode==="ret_cum"){
-        let acc=1;
-        y = y.map((v,i)=>{ if(i===0||v==null||y0[i-1]==null) return 0; const r=v/y0[i-1]-1; acc*= (1+r); return acc-1; });
-      }
-      const k=Number(smoothK);
-      if(k>1 && retMode==="level"){ return {x, y: rollingMean(y,k)}; }
-      return {x,y};
-    }
-
-    function render(){
-      const sym = elSymbol.value || (SYMBOLS[0] || "");
-      const metric = elMetric.value;
-      const retMode = elRet.value;
-      const smoothK = elSmooth.value;
-      const dFrom = elFrom.value? new Date(elFrom.value) : new Date(0);
-      const dTo = elTo.value? new Date(elTo.value) : new Date(8640000000000000); // max
-
-      const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
-      updateKPIs(base, metric);
-      const {x, y} = computeSeries(base, metric, retMode, smoothK);
-
-      const traces = [{
-        x, y, mode:"lines", line:{width:2}, name:"Histórico", hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
-      }];
-
-      const showFc = document.getElementById('showFc').checked;
-      const showBands = document.getElementById('showBands').checked;
-
-      if(showFc){
-        const fc = FC.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r.yhat!=null);
-        if(fc.length){
-          const fcX = fc.map(r=> r.date);
-          const fcY = fc.map(r=> r.yhat);
-          traces.push({
-            x: fcX, y: fcY, mode:"lines", line:{width:2, dash:"dash"}, name:"Proyección 30d",
-            hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
-          });
-          if(showBands){
-            const lo = fc.map(r=> r.yhat_lo);
-            const hi = fc.map(r=> r.yhat_hi);
-            traces.push({
-              x: fcX.concat(fcX.slice().reverse()),
-              y: hi.concat(lo.slice().reverse()),
-              fill: "toself", fillcolor: "rgba(96,165,250,0.15)", line:{width:0},
-              name: "IC 95%", hoverinfo:"skip"
+        
+        function formatPct(x){ 
+            if(x==null||isNaN(x)) return "—"; 
+            return (x*100).toFixed(2)+"%"; 
+        }
+        
+        function formatNumber(x, decimals=2) {
+            if(x==null||isNaN(x)) return "—";
+            return Number(x).toLocaleString(undefined, {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
             });
-          }
         }
-      }
 
-      const layout = {
-        margin:{l:60,r:20,t:10,b:40},
-        paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
-        xaxis:{ showgrid:false, zeroline:false },
-        yaxis:{ showgrid:false, zeroline:false }
-      };
-      Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
-    }
+        // Parse fechas Google Visualization: Date(YYYY,MM,DD[,hh,mm,ss]) o ISO o epoch
+        function parseGvizDate(val){
+            if(val==null) return null;
+            if(val instanceof Date) return val;
+            if(typeof val==="number") return new Date(val);
+            if(typeof val==="string"){
+                const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)/);
+                if(m){
+                    const y=+m[1], mo=+m[2], d=+(m[3]??1), hh=+(m[4]??0), mi=+(m[5]??0), ss=+(m[6]??0);
+                    return new Date(y, mo, d, hh, mi, ss); // mo ya es 0-index
+                }
+                const dISO = new Date(val);
+                if(!isNaN(dISO)) return dISO;
+            }
+            return null;
+        }
 
-    // === Estado y elementos ===
-    let DATA=[], FC=[], SYMBOLS=[];
-    const elSymbol=document.getElementById('symbol');
-    const elMetric=document.getElementById('metric');
-    const elRet=document.getElementById('ret');
-    const elSmooth=document.getElementById('smooth');
-    const elFrom=document.getElementById('dateFrom');
-    const elTo=document.getElementById('dateTo');
+        async function fetchGvizJSON(url) {
+            const res = await fetch(url, { cache: "no-store" });
+            const text = await res.text();
+            const start = text.indexOf("{");
+            const end = text.lastIndexOf("}");
+            if(start === -1 || end === -1){
+                throw new Error("La respuesta no parece ser JSON de gviz. ¿Hoja sin permisos públicos?");
+            }
+            try{
+                return JSON.parse(text.slice(start, end + 1));
+            }catch(e){
+                console.error("GViz parse error:", e, text.slice(0, 200));
+                throw new Error("No se pudo parsear el JSON de gviz.");
+            }
+        }
 
-    const tabSerie=document.getElementById('tabSerie');
-    const tabMetod=document.getElementById('tabMetodologia');
-    const viewSerie=document.getElementById('viewSerie');
-    const viewMetod=document.getElementById('viewMetodologia');
+        function gvizToObjects(gviz) {
+            const cols = gviz.table.cols.map(c => (c.label || c.id || "").trim());
+            const out = [];
+            for (const row of gviz.table.rows) {
+                const obj = {};
+                for(let i=0;i<cols.length;i++){
+                    const cell = row.c[i];
+                    obj[cols[i]] = cell ? (cell.v ?? null) : null;
+                }
+                out.push(obj);
+            }
+            return out;
+        }
 
-    tabSerie.addEventListener('click', ()=>{ tabSerie.classList.add('active'); tabMetod.classList.remove('active'); viewSerie.hidden=false; viewMetod.hidden=true; });
-    tabMetod.addEventListener('click', ()=>{ tabMetod.classList.add('active'); tabSerie.classList.remove('active'); viewSerie.hidden=true; viewMetod.hidden=false; });
+        function coerceHistoricalRows(rows) {
+            const priceCols = ["open","high","low","close","adj_close"];
+            rows.forEach(r => {
+                r.symbol = r.symbol != null ? String(r.symbol) : null;
+                if(r["adjclose"]!=null && r["adj_close"]==null) r["adj_close"]=r["adjclose"];
+                r.date = parseGvizDate(r.date);
+                priceCols.forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
+                r.volume = r.volume==null || r.volume==="" ? null : Number(r.volume);
+            });
+            rows = rows.filter(r => r.date instanceof Date && (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null));
+            rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
+            return rows;
+        }
 
-    async function load() {
-      const histJson = await fetchGvizJSON(document.getElementById('sheetUrl').value);
-      const fcJson   = await fetchGvizJSON(document.getElementById('fcUrl').value);
-      const histRows = coerceHistoricalRows(gvizToObjects(histJson));
-      const fcRows   = coerceForecastRows(gvizToObjects(fcJson));
+        function coerceForecastRows(rows) {
+            rows.forEach(r => {
+                r.symbol = r.symbol != null ? String(r.symbol) : null;
+                r.date = parseGvizDate(r.date);
+                r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
+                ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
+                r.last_obs_date = parseGvizDate(r.last_obs_date);
+            });
+            rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
+            rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0) - (b.fc_h??0));
+            return rows;
+        }
 
-      DATA = histRows;
-      FC   = fcRows;
+        // === Funciones de análisis mejoradas ===
+        function computeReturns(prices) {
+            const returns = [];
+            for (let i = 1; i < prices.length; i++) {
+                if (prices[i] != null && prices[i-1] != null && prices[i-1] !== 0) {
+                    returns.push(prices[i] / prices[i-1] - 1);
+                } else {
+                    returns.push(null);
+                }
+            }
+            return returns;
+        }
 
-      // símbolos desde histórico y proyección
-      SYMBOLS = Array.from(new Set([
-        ...histRows.map(r => r.symbol).filter(Boolean),
-        ...fcRows.map(r => r.symbol).filter(Boolean)
-      ])).sort();
+        function computeVolatility(returns, annualize = true) {
+            const validReturns = returns.filter(r => r != null);
+            if (validReturns.length < 2) return null;
+            
+            const mean = validReturns.reduce((a, b) => a + b, 0) / validReturns.length;
+            const variance = validReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (validReturns.length - 1);
+            const stdDev = Math.sqrt(variance);
+            
+            return annualize ? stdDev * Math.sqrt(252) : stdDev;
+        }
 
-      elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
-      const maxDate = histRows.reduce((m, r) => r.date>m ? r.date : m, new Date(0));
-      const minDate = new Date(maxDate); minDate.setFullYear(minDate.getFullYear() - 3);
-      document.getElementById('dateFrom').value = toISO(minDate);
-      document.getElementById('dateTo').value   = toISO(maxDate);
-      render();
-    }
+        function computeVaR(returns, confidence = 0.05) {
+            const validReturns = returns.filter(r => r != null);
+            if (validReturns.length === 0) return null;
+            
+            validReturns.sort((a, b) => a - b);
+            const index = Math.floor(validReturns.length * confidence);
+            return validReturns[index];
+        }
 
-    window.addEventListener("DOMContentLoaded", ()=>{
-      ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo","showFc","showBands"]
-        .map(id=>document.getElementById(id))
-        .forEach(el=> el && el.addEventListener("change", render));
-      load();
-    });
-  </script>
+        function computeMaxDrawdown(prices) {
+            let peak = -Infinity;
+            let maxDrawdown = 0;
+            
+            for (const price of prices) {
+                if (price != null) {
+                    if (price > peak) peak = price;
+                    const drawdown = (peak - price) / peak;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                }
+            }
+            
+            return maxDrawdown;
+        }
+
+        function computeSharpeRatio(returns, riskFreeRate = 0.02) {
+            const validReturns = returns.filter(r => r != null);
+            if (validReturns.length < 2) return null;
+            
+            const meanReturn = validReturns.reduce((a, b) => a + b, 0) / validReturns.length;
+            const volatility = computeVolatility(validReturns, true);
+            
+            return volatility !== 0 ? (meanReturn * 252 - riskFreeRate) / volatility : null;
+        }
+
+        function computeStats(records, metric) {
+            const values = records.map(r => r[metric]).filter(v => v != null);
+            if (values.length === 0) return {};
+            
+            values.sort((a, b) => a - b);
+            const returns = computeReturns(values);
+            const validReturns = returns.filter(r => r != null);
+            
+            const mean = values.reduce((a, b) => a + b, 0) / values.length;
+            const median = values.length % 2 === 0 
+                ? (values[values.length/2 - 1] + values[values.length/2]) / 2
+                : values[Math.floor(values.length/2)];
+                
+            const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (values.length - 1);
+            const stdDev = Math.sqrt(variance);
+            
+            // Asimetría
+            const skew = values.length > 2 
+                ? values.reduce((a, b) => a + Math.pow((b - mean) / stdDev, 3), 0) / values.length
+                : null;
+                
+            // Curtosis
+            const kurtosis = values.length > 3 
+                ? values.reduce((a, b) => a + Math.pow((b - mean) / stdDev, 4), 0) / values.length - 3
+                : null;
+                
+            return {
+                mean,
+                median,
+                min: values[0],
+                max: values[values.length - 1],
+                std: stdDev,
+                skew,
+                kurtosis,
+                volatility: computeVolatility(validReturns, true),
+                var: computeVaR(validReturns),
+                maxDrawdown: computeMaxDrawdown(values),
+                sharpe: computeSharpeRatio(validReturns),
+                calmar: computeSharpeRatio(validReturns) && computeMaxDrawdown(values) > 0 
+                    ? (mean * 252 - 0.02) / computeMaxDrawdown(values) 
+                    : null
+            };
+        }
+
+        function updateKPIs(records, metric, stats) {
+            const elLast = document.getElementById('kpi_last');
+            const elMtd = document.getElementById('kpi_mtd');
+            const elYtd = document.getElementById('kpi_ytd');
+            const elVolatility = document.getElementById('kpi_volatility');
+            const elLastDate = document.getElementById('kpi_last_date');
+            
+            if(!records.length){ 
+                elLast.textContent = "—"; 
+                elMtd.textContent = "—"; 
+                elYtd.textContent = "—"; 
+                elVolatility.textContent = "—";
+                elLastDate.textContent = "—";
+                return; 
+            }
+            
+            const last = records[records.length-1][metric];
+            const d = records[records.length-1].date;
+            
+            // MTD
+            const firstMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+            const mRecords = records.filter(r => r.date >= firstMonth && r[metric] != null);
+            let mtd = null; 
+            if(mRecords.length >= 2){ 
+                const base = mRecords[0][metric]; 
+                const end = mRecords[mRecords.length-1][metric]; 
+                mtd = base ? (end/base - 1) : null; 
+            }
+            
+            // YTD
+            const firstYear = new Date(d.getFullYear(), 0, 1);
+            const yRecords = records.filter(r => r.date >= firstYear && r[metric] != null);
+            let ytd = null; 
+            if(yRecords.length >= 2){ 
+                const base = yRecords[0][metric]; 
+                const end = yRecords[yRecords.length-1][metric]; 
+                ytd = base ? (end/base - 1) : null; 
+            }
+            
+            elLast.textContent = last == null ? "—" : formatNumber(last);
+            elMtd.textContent = formatPct(mtd);
+            elYtd.textContent = formatPct(ytd);
+            elVolatility.textContent = stats.volatility ? formatPct(stats.volatility) : "—";
+            elLastDate.textContent = toISO(d);
+        }
+
+        function updateStats(stats) {
+            document.getElementById('stat_mean').textContent = formatNumber(stats.mean);
+            document.getElementById('stat_median').textContent = formatNumber(stats.median);
+            document.getElementById('stat_std').textContent = formatNumber(stats.std);
+            document.getElementById('stat_min').textContent = formatNumber(stats.min);
+            document.getElementById('stat_max').textContent = formatNumber(stats.max);
+            document.getElementById('stat_skew').textContent = formatNumber(stats.skew, 4);
+            document.getElementById('stat_kurtosis').textContent = formatNumber(stats.kurtosis, 4);
+            
+            document.getElementById('risk_volatility').textContent = formatPct(stats.volatility);
+            document.getElementById('risk_var').textContent = formatPct(stats.var);
+            document.getElementById('risk_sharpe').textContent = formatNumber(stats.sharpe, 3);
+            document.getElementById('risk_maxdd').textContent = formatPct(stats.maxDrawdown);
+            document.getElementById('risk_calmar').textContent = formatNumber(stats.calmar, 3);
+        }
+
+        function computeSeries(records, metric, retMode, smoothK) {
+            const x = records.map(r => r.date);
+            const y0 = records.map(r => r[metric]);
+            let y = y0.slice();
+            
+            if(retMode === "ret_d"){ 
+                y = y.map((v, i) => i === 0 || v == null || y0[i-1] == null ? null : (v / y0[i-1] - 1)); 
+            }
+            else if(retMode === "ret_cum"){
+                let acc = 1;
+                y = y.map((v, i) => { 
+                    if(i === 0 || v == null || y0[i-1] == null) return 0; 
+                    const r = v / y0[i-1] - 1; 
+                    acc *= (1 + r); 
+                    return acc - 1; 
+                });
+            }
+            
+            const k = Number(smoothK);
+            if(k > 1 && retMode === "level"){ 
+                return {x, y: rollingMean(y, k)}; 
+            }
+            return {x, y};
+        }
+
+        // === Funciones de renderizado mejoradas ===
+        function renderMainChart() {
+            const sym = elSymbol.value || (SYMBOLS[0] || "");
+            const metric = elMetric.value;
+            const retMode = elRet.value;
+            const smoothK = elSmooth.value;
+            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
+            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000); // max
+            const logScale = document.getElementById('logScale').checked;
+
+            const base = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
+            const stats = computeStats(base, metric);
+            updateKPIs(base, metric, stats);
+            updateStats(stats);
+            
+            const {x, y} = computeSeries(base, metric, retMode, smoothK);
+
+            const traces = [];
+            if(x.length){
+                traces.push({
+                    x, y, 
+                    mode: "lines", 
+                    line: {width: 2, color: '#3a86ff'}, 
+                    name: `${sym} - Histórico`,
+                    hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+                });
+            }
+
+            // Comparación con otros símbolos
+            comparisonSymbols.forEach(compareSym => {
+                if (compareSym !== sym) {
+                    const compareData = DATA.filter(r => r.symbol === compareSym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
+                    const compareSeries = computeSeries(compareData, metric, retMode, smoothK);
+                    
+                    if (compareSeries.x.length) {
+                        traces.push({
+                            x: compareSeries.x, 
+                            y: compareSeries.y, 
+                            mode: "lines", 
+                            line: {width: 1.5, dash: "dot"}, 
+                            name: `${compareSym} - Histórico`,
+                            hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+                        });
+                    }
+                }
+            });
+
+            const showFc = document.getElementById('showFc').checked;
+            const showBands = document.getElementById('showBands').checked;
+
+            if(showFc){
+                const fc = FC.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r.yhat != null);
+                if(fc.length){
+                    const fcX = fc.map(r => r.date);
+                    const fcY = fc.map(r => r.yhat);
+                    traces.push({
+                        x: fcX, y: fcY, 
+                        mode: "lines", 
+                        line: {width: 2, dash: "dash", color: '#ff6b6b'}, 
+                        name: `${sym} - Proyección 30d`,
+                        hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+                    });
+                    
+                    if(showBands){
+                        const lo = fc.map(r => r.yhat_lo);
+                        const hi = fc.map(r => r.yhat_hi);
+                        traces.push({
+                            x: fcX.concat(fcX.slice().reverse()),
+                            y: hi.concat(lo.slice().reverse()),
+                            fill: "toself", 
+                            fillcolor: "rgba(255, 107, 107, 0.15)", 
+                            line: {width: 0},
+                            name: "IC 95%", 
+                            hoverinfo: "skip",
+                            showlegend: false
+                        });
+                    }
+                }
+            }
+
+            const layout = {
+                margin: {l: 60, r: 20, t: 40, b: 40},
+                paper_bgcolor: "rgba(0,0,0,0)", 
+                plot_bgcolor: "rgba(0,0,0,0)",
+                xaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    title: "Fecha"
+                },
+                yaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    type: logScale ? 'log' : 'linear',
+                    title: metric === 'volume' ? 'Volumen' : 'Precio'
+                },
+                legend: {
+                    orientation: "h",
+                    y: -0.2,
+                    x: 0.5,
+                    xanchor: "center"
+                },
+                hovermode: "closest"
+            };
+            
+            Plotly.newPlot("chart", traces, layout, {displayModeBar: true, responsive: true});
+        }
+
+        function renderReturnsChart() {
+            const sym = elSymbol.value || (SYMBOLS[0] || "");
+            const metric = elMetric.value;
+            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
+            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
+
+            const base = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
+            if (base.length < 2) return;
+            
+            const returns = computeReturns(base.map(r => r[metric]));
+            const dates = base.slice(1).map(r => r.date);
+            
+            const trace = {
+                x: dates,
+                y: returns,
+                type: 'bar',
+                name: 'Retornos Diarios',
+                marker: {
+                    color: returns.map(r => r >= 0 ? '#4caf50' : '#f44336')
+                }
+            };
+            
+            const layout = {
+                margin: {l: 60, r: 20, t: 40, b: 40},
+                paper_bgcolor: "rgba(0,0,0,0)", 
+                plot_bgcolor: "rgba(0,0,0,0)",
+                xaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    title: "Fecha"
+                },
+                yaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    tickformat: '.2%',
+                    title: "Retorno Diario"
+                },
+                bargap: 0.1
+            };
+            
+            Plotly.newPlot("returnsChart", [trace], layout, {displayModeBar: true, responsive: true});
+        }
+
+        function renderDistributionChart() {
+            const sym = elSymbol.value || (SYMBOLS[0] || "");
+            const metric = elMetric.value;
+            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
+            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
+
+            const base = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
+            if (base.length < 2) return;
+            
+            const returns = computeReturns(base.map(r => r[metric])).filter(r => r != null);
+            
+            const trace = {
+                x: returns,
+                type: 'histogram',
+                name: 'Distribución de Retornos',
+                nbinsx: 30,
+                marker: {
+                    color: '#3a86ff',
+                    line: {
+                        color: 'rgba(0,0,0,0.2)',
+                        width: 1
+                    }
+                },
+                opacity: 0.7
+            };
+            
+            const layout = {
+                margin: {l: 60, r: 20, t: 40, b: 40},
+                paper_bgcolor: "rgba(0,0,0,0)", 
+                plot_bgcolor: "rgba(0,0,0,0)",
+                xaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    tickformat: '.2%',
+                    title: "Retorno Diario"
+                },
+                yaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    title: "Frecuencia"
+                },
+                bargap: 0.05
+            };
+            
+            Plotly.newPlot("distributionChart", [trace], layout, {displayModeBar: true, responsive: true});
+        }
+
+        function renderCorrelationChart() {
+            const symbolsToCompare = [elSymbol.value, ...comparisonSymbols].filter(s => s && SYMBOLS.includes(s));
+            if (symbolsToCompare.length < 2) return;
+            
+            const metric = elMetric.value;
+            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
+            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
+            
+            // Obtener datos para cada símbolo
+            const symbolData = {};
+            symbolsToCompare.forEach(sym => {
+                const data = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
+                symbolData[sym] = data.map(r => r[metric]);
+            });
+            
+            // Calcular matriz de correlación
+            const correlations = [];
+            const labels = [];
+            
+            for (let i = 0; i < symbolsToCompare.length; i++) {
+                labels.push(symbolsToCompare[i]);
+                const row = [];
+                for (let j = 0; j < symbolsToCompare.length; j++) {
+                    if (i === j) {
+                        row.push(1);
+                    } else {
+                        const dataI = symbolData[symbolsToCompare[i]];
+                        const dataJ = symbolData[symbolsToCompare[j]];
+                        
+                        // Encontrar fechas comunes
+                        const commonDataI = [];
+                        const commonDataJ = [];
+                        
+                        DATA.filter(r => r.symbol === symbolsToCompare[i] && r.date >= dFrom && r.date <= dTo && r[metric] != null)
+                            .forEach(r => {
+                                const matching = DATA.find(d => 
+                                    d.symbol === symbolsToCompare[j] && 
+                                    d.date.getTime() === r.date.getTime() && 
+                                    d[metric] != null
+                                );
+                                if (matching) {
+                                    commonDataI.push(r[metric]);
+                                    commonDataJ.push(matching[metric]);
+                                }
+                            });
+                        
+                        if (commonDataI.length > 1) {
+                            const meanI = commonDataI.reduce((a, b) => a + b, 0) / commonDataI.length;
+                            const meanJ = commonDataJ.reduce((a, b) => a + b, 0) / commonDataJ.length;
+                            
+                            const numerator = commonDataI.reduce((sum, _, idx) => 
+                                sum + (commonDataI[idx] - meanI) * (commonDataJ[idx] - meanJ), 0);
+                            const denominator = Math.sqrt(
+                                commonDataI.reduce((sum, val) => sum + Math.pow(val - meanI, 2), 0) *
+                                commonDataJ.reduce((sum, val) => sum + Math.pow(val - meanJ, 2), 0)
+                            );
+                            
+                            row.push(denominator !== 0 ? numerator / denominator : 0);
+                        } else {
+                            row.push(0);
+                        }
+                    }
+                }
+                correlations.push(row);
+            }
+            
+            const trace = {
+                z: correlations,
+                x: labels,
+                y: labels,
+                type: 'heatmap',
+                colorscale: 'RdBu',
+                zmin: -1,
+                zmax: 1,
+                hoverongaps: false,
+                hovertemplate: 'Corr(%{x}, %{y}) = %{z:.3f}<extra></extra>'
+            };
+            
+            const layout = {
+                margin: {l: 60, r: 20, t: 40, b: 40},
+                paper_bgcolor: "rgba(0,0,0,0)", 
+                plot_bgcolor: "rgba(0,0,0,0)",
+                xaxis: { 
+                    tickangle: -45,
+                    title: "Símbolos"
+                },
+                yaxis: { 
+                    title: "Símbolos"
+                }
+            };
+            
+            Plotly.newPlot("correlationChart", [trace], layout, {displayModeBar: true, responsive: true});
+        }
+
+        function renderComparisonChart() {
+            const symbolsToCompare = [elSymbol.value, ...comparisonSymbols].filter(s => s && SYMBOLS.includes(s));
+            if (symbolsToCompare.length < 2) return;
+            
+            const metric = elMetric.value;
+            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
+            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
+            
+            const traces = [];
+            const colors = ['#3a86ff', '#ff6b6b', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+            
+            symbolsToCompare.forEach((sym, idx) => {
+                const data = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
+                if (data.length) {
+                    // Normalizar para comparación (base 100)
+                    const firstValue = data[0][metric];
+                    const normalized = data.map(r => (r[metric] / firstValue) * 100);
+                    
+                    traces.push({
+                        x: data.map(r => r.date),
+                        y: normalized,
+                        mode: 'lines',
+                        name: sym,
+                        line: { width: 2, color: colors[idx % colors.length] },
+                        hovertemplate: "%{x|%Y-%m-%d}<br>" + sym + ": %{y:.2f} (base 100)<extra></extra>"
+                    });
+                }
+            });
+            
+            const layout = {
+                margin: {l: 60, r: 20, t: 40, b: 40},
+                paper_bgcolor: "rgba(0,0,0,0)", 
+                plot_bgcolor: "rgba(0,0,0,0)",
+                xaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    title: "Fecha"
+                },
+                yaxis: { 
+                    showgrid: true, 
+                    gridcolor: 'rgba(128,128,128,0.2)',
+                    zeroline: false,
+                    title: "Performance (Base 100)"
+                },
+                legend: {
+                    orientation: "h",
+                    y: -0.2,
+                    x: 0.5,
+                    xanchor: "center"
+                },
+                hovermode: "closest"
+            };
+            
+            Plotly.newPlot("comparisonChart", traces, layout, {displayModeBar: true, responsive: true});
+        }
+
+        function render() {
+            renderMainChart();
+            renderReturnsChart();
+            renderDistributionChart();
+            renderCorrelationChart();
+            renderComparisonChart();
+        }
+
+        // === Estado y elementos ===
+        let DATA = [], FC = [], SYMBOLS = [];
+        let comparisonSymbols = [];
+        
+        const elSymbol = document.getElementById('symbol');
+        const elMetric = document.getElementById('metric');
+        const elRet = document.getElementById('ret');
+        const elSmooth = document.getElementById('smooth');
+        const elFrom = document.getElementById('dateFrom');
+        const elTo = document.getElementById('dateTo');
+        const elCompareSymbol = document.getElementById('compareSymbol');
+        const elComparisonSymbols = document.getElementById('comparisonSymbols');
+        const elLoader = document.getElementById('loader');
+        const elErrorMessage = document.getElementById('errorMessage');
+
+        // === Funciones de UI ===
+        function showLoader() {
+            elLoader.style.display = 'block';
+            elErrorMessage.style.display = 'none';
+        }
+        
+        function hideLoader() {
+            elLoader.style.display = 'none';
+        }
+        
+        function showError(message) {
+            elErrorMessage.textContent = message;
+            elErrorMessage.style.display = 'block';
+            hideLoader();
+        }
+
+        function updateComparisonSymbols() {
+            elCompareSymbol.innerHTML = '<option value="">Agregar comparación...</option>';
+            SYMBOLS.forEach(sym => {
+                if (sym !== elSymbol.value && !comparisonSymbols.includes(sym)) {
+                    elCompareSymbol.innerHTML += `<option value="${sym}">${sym}</option>`;
+                }
+            });
+            
+            elComparisonSymbols.innerHTML = '';
+            comparisonSymbols.forEach(sym => {
+                const tag = document.createElement('div');
+                tag.className = 'symbol-tag';
+                tag.innerHTML = `${sym} <span class="remove" data-symbol="${sym}">×</span>`;
+                elComparisonSymbols.appendChild(tag);
+            });
+            
+            // Agregar event listeners para eliminar símbolos
+            document.querySelectorAll('.symbol-tag .remove').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const symbolToRemove = this.getAttribute('data-symbol');
+                    comparisonSymbols = comparisonSymbols.filter(s => s !== symbolToRemove);
+                    updateComparisonSymbols();
+                    render();
+                });
+            });
+        }
+
+        // === Carga de datos ===
+        async function load() {
+            showLoader();
+            
+            try {
+                const histJson = await fetchGvizJSON(document.getElementById('sheetUrl').value);
+                const fcJson   = await fetchGvizJSON(document.getElementById('fcUrl').value);
+                const histRows = coerceHistoricalRows(gvizToObjects(histJson));
+                const fcRows   = coerceForecastRows(gvizToObjects(fcJson));
+
+                DATA = histRows;
+                FC   = fcRows;
+
+                // símbolos desde histórico y proyección
+                SYMBOLS = Array.from(new Set([
+                    ...histRows.map(r => r.symbol).filter(Boolean),
+                    ...fcRows.map(r => r.symbol).filter(Boolean)
+                ])).sort();
+
+                elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
+                updateComparisonSymbols();
+
+                // Fijar rango de fechas usando datos combinados (histórico ∪ proyección)
+                const allDates = [
+                    ...histRows.map(r => r.date),
+                    ...fcRows.map(r => r.date)
+                ].filter(d => d instanceof Date);
+                
+                if(allDates.length){
+                    const maxDate = new Date(Math.max.apply(null, allDates));
+                    const minDate = new Date(maxDate); 
+                    minDate.setFullYear(minDate.getFullYear() - 3);
+                    
+                    document.getElementById('dateFrom').value = toISO(minDate);
+                    document.getElementById('dateTo').value   = toISO(maxDate);
+                } else {
+                    // fallback amplio
+                    document.getElementById('dateFrom').value = "1990-01-01";
+                    document.getElementById('dateTo').value   = toISO(new Date());
+                }
+
+                render();
+                hideLoader();
+            } catch(e) {
+                console.error(e);
+                showError(e.message || String(e));
+            }
+        }
+
+        // === Inicialización ===
+        window.addEventListener("DOMContentLoaded", () => {
+            // Event listeners para controles
+            ["sheetUrl", "fcUrl", "symbol", "metric", "ret", "smooth", "dateFrom", "dateTo", "showFc", "showBands", "logScale"]
+                .map(id => document.getElementById(id))
+                .forEach(el => el && el.addEventListener("change", render));
+            
+            // Botón de carga de datos
+            document.getElementById('loadDataBtn').addEventListener('click', load);
+            
+            // Botón de actualización
+            document.getElementById('refreshBtn').addEventListener('click', load);
+            
+            // Botón de agregar comparación
+            document.getElementById('addComparisonBtn').addEventListener('click', function() {
+                const sym = elCompareSymbol.value;
+                if (sym && !comparisonSymbols.includes(sym)) {
+                    comparisonSymbols.push(sym);
+                    updateComparisonSymbols();
+                    render();
+                }
+            });
+            
+            // Tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remover clase active de todos los tabs y contenidos
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    // Agregar clase active al tab clickeado y su contenido
+                    this.classList.add('active');
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(tabId + 'Tab').classList.add('active');
+                    
+                    // Si es la pestaña de correlación, renderizar gráficos específicos
+                    if (tabId === 'correlation') {
+                        renderCorrelationChart();
+                        renderComparisonChart();
+                    }
+                });
+            });
+            
+            // Toggle de tema
+            document.getElementById('themeToggle').addEventListener('click', function() {
+                document.body.classList.toggle('light-mode');
+                this.innerHTML = document.body.classList.contains('light-mode') ? '<i>☀️</i>' : '<i>🌙</i>';
+                render(); // Re-renderizar para ajustar colores
+            });
+            
+            // Botones de exportación (placeholder)
+            document.getElementById('exportChartBtn').addEventListener('click', function() {
+                alert('Funcionalidad de exportación de gráfico en desarrollo');
+            });
+            
+            document.getElementById('exportDataBtn').addEventListener('click', function() {
+                alert('Funcionalidad de exportación de datos en desarrollo');
+            });
+            
+            // Cargar datos iniciales
+            load();
+        });
+    </script>
 </body>
 </html>

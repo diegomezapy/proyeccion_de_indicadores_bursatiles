@@ -2,12 +2,23 @@ name: Actualizar datos y proyecciones
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # 11:00 UTC = 06:00 America/Guayaquil
+    # 11:00 UTC = 06:00 America/Guayaquil
+    - cron: "0 11 * * *"
   workflow_dispatch:
+
+# Evita que se ejecuten en paralelo dos corridas del mismo flujo en la misma rama
+concurrency:
+  group: indices-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read   # mínimo necesario para checkout
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -22,18 +33,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install polars pyarrow yfinance gspread gspread-dataframe pandas google-auth pmdarima numpy
 
+      # Comprobación explícita para saber si el secreto llega al runner
+      - name: Check secret presence
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" ] || [ -n "${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}" ]; then
+            echo "Secret presente (contenido oculto)."
+          else
+            echo "Falta definir GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo) o GCP_SERVICE_ACCOUNT_JSON_B64 (Base64)." >&2
+            exit 1
+          fi
+
       - name: Prepare Google credentials
         shell: bash
         run: |
           set -euo pipefail
           if [ -n "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" ]; then
+            # JSON crudo pegado en el secreto
             echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" > creds.json
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> $GITHUB_ENV
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> "$GITHUB_ENV"
           elif [ -n "${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}" ]; then
+            # JSON en Base64
             echo "${{ secrets.GCP_SERVICE_ACCOUNT_JSON_B64 }}" | base64 -d > creds.json
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> $GITHUB_ENV
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/creds.json" >> "$GITHUB_ENV"
           else
-            echo "Falta definir GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo) o GCP_SERVICE_ACCOUNT_JSON_B64 (Base64)." >&2
+            echo "Falta definir GOOGLE_SERVICE_ACCOUNT_JSON o GCP_SERVICE_ACCOUNT_JSON_B64" >&2
             exit 1
           fi
 

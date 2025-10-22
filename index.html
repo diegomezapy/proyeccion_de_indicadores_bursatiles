@@ -146,61 +146,179 @@
   <footer>Datos: Google Sheets. Gráficos: Plotly. ©</footer>
 
   <script>
-    function toISO(d){ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${da}`; }
-    function rollingMean(arr,k){ if(k<=1) return arr.slice(); const out=new Array(arr.length).fill(null); let s=0,q=[]; for(let i=0;i<arr.length;i++){ const v=arr[i]==null?NaN:Number(arr[i]); q.push(v); s+=v; if(q.length>k) s-=q.shift(); if(q.length===k) out[i]=s/k; } return out; }
+    // === Utilidades ===
+    function toISO(d){
+      const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }
+    function rollingMean(arr,k){
+      if(k<=1) return arr.slice();
+      const out=new Array(arr.length).fill(null);
+      let s=0, q=[];
+      for(let i=0;i<arr.length;i++){
+        const v = arr[i]==null ? NaN : Number(arr[i]);
+        q.push(v); s+=v;
+        if(q.length>k) s-=q.shift();
+        if(q.length===k) out[i]=s/k;
+      }
+      return out;
+    }
     function formatPct(x){ if(x==null||isNaN(x)) return "—"; return (x*100).toFixed(2)+"%"; }
+
+    // Parse de fechas de Google Visualization: "Date(YYYY,MM,DD)" o ISO o epoch
+    function parseGvizDate(val){
+      if(val==null) return null;
+      if(val instanceof Date) return val;
+      if(typeof val==="number"){  // milisegundos
+        return new Date(val);
+      }
+      if(typeof val==="string"){
+        const m = val.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)/);
+        if(m){
+          const y=+m[1], mo=+m[2], d=+m[3];
+          return new Date(y, mo, d); // mo ya es 0-index en gviz
+        }
+        const dISO = new Date(val);
+        if(!isNaN(dISO)) return dISO;
+      }
+      return null;
+    }
 
     async function fetchGvizJSON(url) {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();
       const start = text.indexOf("{");
       const end = text.lastIndexOf("}");
-      const json = JSON.parse(text.slice(start, end + 1));
-      return json;
+      return JSON.parse(text.slice(start, end + 1));
     }
 
     function gvizToObjects(gviz) {
-      const cols = gviz.table.cols.map(c => c.label || c.id);
+      const cols = gviz.table.cols.map(c => (c.label || c.id || "").trim());
       const out = [];
       for (const row of gviz.table.rows) {
         const obj = {};
-        row.c.forEach((cell, i) => {
-          obj[cols[i]] = cell ? cell.v : null;
-        });
+        for(let i=0;i<cols.length;i++){
+          const cell = row.c[i];
+          obj[cols[i]] = cell ? (cell.v ?? null) : null;
+        }
         out.push(obj);
       }
       return out;
     }
 
     function coerceHistoricalRows(rows) {
+      const priceCols = ["open","high","low","close","adj_close"];
       rows.forEach(r => {
-        r.symbol = r.symbol;
-        r.date = r.date ? new Date(r.date) : null;
-        ["open","high","low","close","adj_close","volume"].forEach(k => {
-          r[k] = r[k] == null || r[k] === "" ? null : Number(r[k]);
-        });
+        r.symbol = r.symbol != null ? String(r.symbol) : null;
+        // admite nombres alternativos (por si la cabecera llega con otro casing)
+        if(r["adjclose"]!=null && r["adj_close"]==null) r["adj_close"]=r["adjclose"];
+        r.date = parseGvizDate(r.date);
+        priceCols.forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
+        r.volume = r.volume==null || r.volume==="" ? null : Number(r.volume);
       });
+      // eliminar filas sin precio alguno
+      rows = rows.filter(r => r.date instanceof Date && (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null));
       rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
       return rows;
     }
 
     function coerceForecastRows(rows) {
       rows.forEach(r => {
-        r.symbol = r.symbol;
-        r.date = r.date ? new Date(r.date) : null;
-        r.fc_h = r.fc_h == null || r.fc_h === "" ? null : Number(r.fc_h);
-        ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => {
-          r[k] = r[k] == null || r[k] === "" ? null : Number(r[k]);
-        });
-        r.last_obs_date = r.last_obs_date ? new Date(r.last_obs_date) : null;
+        r.symbol = r.symbol != null ? String(r.symbol) : null;
+        r.date = parseGvizDate(r.date);
+        r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
+        ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
+        r.last_obs_date = parseGvizDate(r.last_obs_date);
       });
-      rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || a.fc_h - b.fc_h);
+      rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
+      rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0) - (b.fc_h??0));
       return rows;
     }
 
+    function updateKPIs(records, metric){
+      const elLast=document.getElementById('kpi_last');
+      const elMtd=document.getElementById('kpi_mtd');
+      const elYtd=document.getElementById('kpi_ytd');
+      if(!records.length){ elLast.textContent="—"; elMtd.textContent="—"; elYtd.textContent="—"; return; }
+      const last = records[records.length-1][metric];
+      const d = records[records.length-1].date;
+      const firstMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mRecords = records.filter(r=> r.date>=firstMonth && r[metric]!=null);
+      let mtd=null; if(mRecords.length>=2){ const base=mRecords[0][metric]; const end=mRecords[mRecords.length-1][metric]; mtd = base? (end/base - 1): null; }
+      const firstYear = new Date(d.getFullYear(), 0, 1);
+      const yRecords = records.filter(r=> r.date>=firstYear && r[metric]!=null);
+      let ytd=null; if(yRecords.length>=2){ const base=yRecords[0][metric]; const end=yRecords[yRecords.length-1][metric]; ytd = base? (end/base - 1): null; }
+      elLast.textContent = last==null? "—" : last.toLocaleString(undefined,{maximumFractionDigits:2});
+      elMtd.textContent  = formatPct(mtd);
+      elYtd.textContent  = formatPct(ytd);
+    }
+
+    function computeSeries(records, metric, retMode, smoothK){
+      const x = records.map(r=>r.date);
+      const y0 = records.map(r=>r[metric]);
+      let y = y0.slice();
+      if(retMode==="ret_d"){ y = y.map((v,i)=> i===0||v==null||y0[i-1]==null? null : (v/y0[i-1]-1)); }
+      else if(retMode==="ret_cum"){
+        let acc=1;
+        y = y.map((v,i)=>{ if(i===0||v==null||y0[i-1]==null) return 0; const r=v/y0[i-1]-1; acc*= (1+r); return acc-1; });
+      }
+      const k=Number(smoothK);
+      if(k>1 && retMode==="level"){ return {x, y: rollingMean(y,k)}; }
+      return {x,y};
+    }
+
+    function render(){
+      const sym = elSymbol.value || (SYMBOLS[0] || "");
+      const metric = elMetric.value;
+      const retMode = elRet.value;
+      const smoothK = elSmooth.value;
+      const dFrom = elFrom.value? new Date(elFrom.value) : new Date(0);
+      const dTo = elTo.value? new Date(elTo.value) : new Date(8640000000000000); // max
+
+      const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
+      updateKPIs(base, metric);
+      const {x, y} = computeSeries(base, metric, retMode, smoothK);
+
+      const traces = [{
+        x, y, mode:"lines", line:{width:2}, name:"Histórico", hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+      }];
+
+      const showFc = document.getElementById('showFc').checked;
+      const showBands = document.getElementById('showBands').checked;
+
+      if(showFc){
+        const fc = FC.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r.yhat!=null);
+        if(fc.length){
+          const fcX = fc.map(r=> r.date);
+          const fcY = fc.map(r=> r.yhat);
+          traces.push({
+            x: fcX, y: fcY, mode:"lines", line:{width:2, dash:"dash"}, name:"Proyección 30d",
+            hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+          });
+          if(showBands){
+            const lo = fc.map(r=> r.yhat_lo);
+            const hi = fc.map(r=> r.yhat_hi);
+            traces.push({
+              x: fcX.concat(fcX.slice().reverse()),
+              y: hi.concat(lo.slice().reverse()),
+              fill: "toself", fillcolor: "rgba(96,165,250,0.15)", line:{width:0},
+              name: "IC 95%", hoverinfo:"skip"
+            });
+          }
+        }
+      }
+
+      const layout = {
+        margin:{l:60,r:20,t:10,b:40},
+        paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+        xaxis:{ showgrid:false, zeroline:false },
+        yaxis:{ showgrid:false, zeroline:false }
+      };
+      Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
+    }
+
+    // === Estado y elementos ===
     let DATA=[], FC=[], SYMBOLS=[];
-    const elUrl=document.getElementById('sheetUrl');
-    const elFcUrl=document.getElementById('fcUrl');
     const elSymbol=document.getElementById('symbol');
     const elMetric=document.getElementById('metric');
     const elRet=document.getElementById('ret');
@@ -216,88 +334,23 @@
     tabSerie.addEventListener('click', ()=>{ tabSerie.classList.add('active'); tabMetod.classList.remove('active'); viewSerie.hidden=false; viewMetod.hidden=true; });
     tabMetod.addEventListener('click', ()=>{ tabMetod.classList.add('active'); tabSerie.classList.remove('active'); viewSerie.hidden=true; viewMetod.hidden=false; });
 
-    function updateKPIs(records, metric){
-      if(!records.length){ document.getElementById('kpi_last').textContent="—"; document.getElementById('kpi_mtd').textContent="—"; document.getElementById('kpi_ytd').textContent="—"; return; }
-      const last = records[records.length-1][metric];
-      const d = records[records.length-1].date;
-      const firstMonth = new Date(d.getFullYear(), d.getMonth(), 1);
-      const mRecords = records.filter(r=> r.date>=firstMonth && r[metric]!=null);
-      let mtd=null; if(mRecords.length>=2){ const base=mRecords[0][metric]; const end=mRecords[mRecords.length-1][metric]; mtd = base? (end/base - 1): null; }
-      const firstYear = new Date(d.getFullYear(), 0, 1);
-      const yRecords = records.filter(r=> r.date>=firstYear && r[metric]!=null);
-      let ytd=null; if(yRecords.length>=2){ const base=yRecords[0][metric]; const end=yRecords[yRecords.length-1][metric]; ytd = base? (end/base - 1): null; }
-      document.getElementById('kpi_last').textContent = last==null? "—" : last.toLocaleString(undefined,{maximumFractionDigits:2});
-      document.getElementById('kpi_mtd').textContent = formatPct(mtd);
-      document.getElementById('kpi_ytd').textContent = formatPct(ytd);
-    }
-
-    function computeSeries(records, metric, retMode, smoothK){
-      const x = records.map(r=>r.date);
-      const y0 = records.map(r=>r[metric]);
-      let y = y0.slice();
-      if(retMode==="ret_d"){ y = y.map((v,i)=> i===0||v==null||y0[i-1]==null? null : (v/y0[i-1]-1)); }
-      else if(retMode==="ret_cum"){
-        let acc=1;
-        y = y.map((v,i)=>{ if(i===0||v==null||y0[i-1]==null) return 0; const r=v/y0[i-1]-1; acc*= (1+r); return acc-1; });
-      }
-      const k=Number(smoothK);
-      if(k>1 && retMode==="level"){ const ysm = rollingMean(y,k); return {x, y: ysm}; }
-      return {x,y};
-    }
-
-    function render(){
-      const sym = elSymbol.value || (SYMBOLS[0] || "");
-      const metric = elMetric.value;
-      const retMode = elRet.value;
-      const smoothK = elSmooth.value;
-      const dFrom = elFrom.value? new Date(elFrom.value) : new Date(0);
-      const dTo = elTo.value? new Date(elTo.value) : new Date();
-
-      const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
-      updateKPIs(base, metric);
-      const {x, y} = computeSeries(base, metric, retMode, smoothK);
-      const traces = [{
-        x, y, mode:"lines", line:{width:2}, name:"Histórico", hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
-      }];
-
-      const fc = FC.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo);
-      if(fc.length){
-        const fcX = fc.map(r=> r.date);
-        const fcY = fc.map(r=> r.yhat);
-        traces.push({
-          x: fcX, y: fcY, mode:"lines", line:{width:2, dash:"dash"}, name:"Proyección 30d",
-          hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
-        });
-        const lo = fc.map(r=> r.yhat_lo);
-        const hi = fc.map(r=> r.yhat_hi);
-        traces.push({
-          x: fcX.concat(fcX.slice().reverse()),
-          y: hi.concat(lo.slice().reverse()),
-          fill: "toself", fillcolor: "rgba(96,165,250,0.15)", line:{width:0},
-          name: "IC 95%", hoverinfo:"skip"
-        });
-      }
-
-      const layout = {
-        margin:{l:60,r:20,t:10,b:40},
-        paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
-        xaxis:{ showgrid:false, zeroline:false },
-        yaxis:{ showgrid:false, zeroline:false }
-      };
-      Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
-    }
-
     async function load() {
       const histJson = await fetchGvizJSON(document.getElementById('sheetUrl').value);
       const fcJson   = await fetchGvizJSON(document.getElementById('fcUrl').value);
       const histRows = coerceHistoricalRows(gvizToObjects(histJson));
       const fcRows   = coerceForecastRows(gvizToObjects(fcJson));
+
       DATA = histRows;
       FC   = fcRows;
-      SYMBOLS = Array.from(new Set(histRows.map(r => r.symbol)));
-      document.getElementById('symbol').innerHTML =
-        SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
-      const maxDate = histRows.reduce((m, r) => r.date > m ? r.date : m, new Date(0));
+
+      // símbolos desde histórico y proyección
+      SYMBOLS = Array.from(new Set([
+        ...histRows.map(r => r.symbol).filter(Boolean),
+        ...fcRows.map(r => r.symbol).filter(Boolean)
+      ])).sort();
+
+      elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
+      const maxDate = histRows.reduce((m, r) => r.date>m ? r.date : m, new Date(0));
       const minDate = new Date(maxDate); minDate.setFullYear(minDate.getFullYear() - 3);
       document.getElementById('dateFrom').value = toISO(minDate);
       document.getElementById('dateTo').value   = toISO(maxDate);
@@ -305,7 +358,7 @@
     }
 
     window.addEventListener("DOMContentLoaded", ()=>{
-      ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo"]
+      ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo","showFc","showBands"]
         .map(id=>document.getElementById(id))
         .forEach(el=> el && el.addEventListener("change", render));
       load();

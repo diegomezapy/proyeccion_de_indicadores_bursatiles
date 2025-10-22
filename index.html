@@ -458,15 +458,34 @@
             <div class="sidebar">
                 <div class="card">
                     <h3 class="card-title"><i>⚙️</i> Configuración de Datos</h3>
+
+
+
                     <div class="form-group">
-                        <label for="sheetUrl">URL Hoja Histórica</label>
-                        <input type="text" id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=Historico">
-                    </div>
-                    <div class="form-group">
-                        <label for="fcUrl">URL Hoja Proyección</label>
-                        <input type="text" id="fcUrl" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=Proyecciones">
+                          <label for="sheetUrl">URL Hoja Histórica (indices)</label>
+                          <input
+                            type="url"
+                            id="sheetUrl"
+                            value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices"
+                            inputmode="url"
+                            spellcheck="false"
+                            autocomplete="off"
+                          >
+                        </div>
                         
-                    </div>
+                        <div class="form-group">
+                          <label for="fcUrl">URL Hoja Proyección (proyecciones_30d)</label>
+                          <input
+                            type="url"
+                            id="fcUrl"
+                            value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d"
+                            inputmode="url"
+                            spellcheck="false"
+                            autocomplete="off"
+                          >
+                        </div>
+                        
+                                            
                     <button class="btn" id="loadDataBtn">
                         <i>📥</i> Cargar Datos
                     </button>

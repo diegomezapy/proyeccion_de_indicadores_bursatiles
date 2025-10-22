@@ -821,18 +821,51 @@
             return rows;
         }
 
-        function coerceForecastRows(rows) {
-            rows.forEach(r => {
-                r.symbol = r.symbol != null ? String(r.symbol) : null;
-                r.date = parseGvizDate(r.date);
-                r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
-                ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
-                r.last_obs_date = parseGvizDate(r.last_obs_date);
-            });
-            rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
-            rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0) - (b.fc_h??0));
-            return rows;
+
+        function coerceHistoricalRows(rows) {
+          const alias = {
+            symbol: ['symbol','símbolo','simbolo','ticker'],
+            date:   ['date','fecha'],
+            open:   ['open','apertura'],
+            high:   ['high','máximo','maximo'],
+            low:    ['low','mínimo','minimo'],
+            close:  ['close','cierre'],
+            adj_close: ['adj_close','adjclose','cierre_ajustado','cierre ajustado'],
+            volume: ['volume','volumen']
+          };
+          const mapKey = (obj, target) => {
+            for (const k of alias[target]) {
+              if (k in obj && obj[k] != null) return obj[k];
+              // intenta también por lower-case y quitando espacios
+              const kk = Object.keys(obj).find(
+                c => c && c.toString().trim().toLowerCase() === k
+              );
+              if (kk && obj[kk] != null) return obj[kk];
+            }
+            return null;
+          };
+        
+          rows = rows.map(r0 => {
+            const r = {};
+            r.symbol = mapKey(r0,'symbol') != null ? String(mapKey(r0,'symbol')) : null;
+            const d  = mapKey(r0,'date'); r.date = parseGvizDate(d);
+            r.open   = mapKey(r0,'open');    r.open   = r.open==null||r.open===''?null:Number(r.open);
+            r.high   = mapKey(r0,'high');    r.high   = r.high==null||r.high===''?null:Number(r.high);
+            r.low    = mapKey(r0,'low');     r.low    = r.low==null||r.low===''?null:Number(r.low);
+            r.close  = mapKey(r0,'close');   r.close  = r.close==null||r.close===''?null:Number(r.close);
+            r.adj_close = mapKey(r0,'adj_close'); r.adj_close = r.adj_close==null||r.adj_close===''?null:Number(r.adj_close);
+            r.volume = mapKey(r0,'volume');  r.volume = r.volume==null||r.volume===''?null:Number(r.volume);
+            return r;
+          });
+        
+          rows = rows.filter(r =>
+            r.date instanceof Date &&
+            (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null)
+          );
+          rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
+          return rows;
         }
+
 
         // === Funciones de análisis mejoradas ===
         function computeReturns(prices) {

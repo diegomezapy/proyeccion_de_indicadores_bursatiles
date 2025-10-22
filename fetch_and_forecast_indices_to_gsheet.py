@@ -1,25 +1,57 @@
 # fetch_and_forecast_indices_to_gsheet.py
 from __future__ import annotations
-import os, io, base64, datetime as dt, tempfile, urllib.request
+import os, io, base64, datetime as dt, urllib.request
 import numpy as np
 import pandas as pd
 import polars as pl
 import yfinance as yf
 import gspread
 from gspread_dataframe import set_with_dataframe
-from google.oauth2.service_account import Credentials
 from statsmodels.tsa.arima.model import ARIMA
+from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError as _RefreshError
 
-SHEET_ID = "1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0"
-WS_DATA = "indices"
-WS_FC   = "proyecciones_30d"
-SYMBOLS = ["^GSPC","^IXIC","^DJI","^FTSE","^IBEX","^BVSP","^MERV","^VIX"]
+# =========================
+# Configuración principal
+# =========================
+SHEET_ID   = "1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0"
+WS_DATA    = "indices"
+WS_FC      = "proyecciones_30d"
+SYMBOLS    = ["^GSPC","^IXIC","^DJI","^FTSE","^IBEX","^BVSP","^MERV","^VIX"]
 START_DATE = dt.date(1980, 1, 1)
-HORIZON = 30
+HORIZON    = 30  # pasos de pronóstico
 
-# ------------------------
-# Lectura robusta (stooq)
-# ------------------------
+# =========================
+# Utilidades generales
+# =========================
+def _canon(s: str) -> str:
+    return "".join(ch for ch in s.lower() if ch.isalnum())
+
+def _find_col_by_prefix(pdf_cols: list[str], aliases: list[str]) -> str | None:
+    cols_canon = {c: _canon(c) for c in pdf_cols}
+    alias_canon = [_canon(a) for a in aliases]
+    for c, cc in cols_canon.items():
+        for ac in alias_canon:
+            if cc.startswith(ac):
+                return c
+    return None
+
+def _next_business_days(start_date: dt.date, n: int) -> list[dt.date]:
+    out = []
+    d = start_date
+    while len(out) < n:
+        d = d + dt.timedelta(days=1)
+        if d.weekday() < 5:
+            out.append(d)
+    return out
+
+def _safe_log(x: pd.Series) -> pd.Series:
+    return np.log(x.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+
+# =========================
+# Descarga de datos
+# =========================
 def _stooq_fallback(symbol: str) -> pl.DataFrame | None:
     mapping = {
         "^GSPC": "^spx", "^IXIC": "^ixic", "^DJI": "^dji", "^FTSE": "^ftse",
@@ -41,34 +73,37 @@ def _stooq_fallback(symbol: str) -> pl.DataFrame | None:
         infer_schema_length=10000,
         ignore_errors=True,
         null_values=nulls,
-        dtypes={
-            "Date": pl.Utf8, "Open": pl.Utf8, "High": pl.Utf8,
-            "Low":  pl.Utf8, "Close": pl.Utf8, "Volume": pl.Utf8,
-        },
+        dtypes={"Date": pl.Utf8, "Open": pl.Utf8, "High": pl.Utf8, "Low": pl.Utf8, "Close": pl.Utf8, "Volume": pl.Utf8},
         try_parse_dates=False,
         encoding="utf8-lossy"
     )
+    if "Date" not in df_txt.columns or "Close" not in df_txt.columns:
+        return None
 
     df = df_txt.with_columns([
         pl.col("Date").str.strptime(pl.Date, "%Y-%m-%d", strict=False).alias("date"),
         pl.col("Open").str.replace(",", "").cast(pl.Float64, strict=False).alias("open"),
         pl.col("High").str.replace(",", "").cast(pl.Float64, strict=False).alias("high"),
-        pl.col("Low").str.replace(",", "").cast(pl.Float64, strict=False).alias("low"),
+        pl.col("Low"). str.replace(",", "").cast(pl.Float64, strict=False).alias("low"),
         pl.col("Close").str.replace(",", "").cast(pl.Float64, strict=False).alias("close"),
-        pl.col("Volume").str.replace(",", "").cast(pl.Int64, strict=False).alias("volume"),
-    ]).select(["date", "open", "high", "low", "close", "volume"])
+        pl.col("Volume").str.replace(",", "").cast(pl.Int64,  strict=False).alias("volume"),
+    ]).select(["date","open","high","low","close","volume"])
 
     df = df.with_columns([
         pl.lit(symbol).alias("symbol"),
         pl.lit("stooq").alias("source")
-    ]).select(["symbol", "date", "open", "high", "low", "close", "volume", "source"])
+    ]).select(["symbol","date","open","high","low","close","volume","source"])
 
     df = df.filter(pl.col("date").is_not_null() & pl.col("close").is_not_null())
-    return df if df.height > 0 else None
+    if df.height == 0:
+        return None
 
-# ------------------------
-# Lectura (Yahoo) — robusta a nombres de columnas
-# ------------------------
+    if "adj_close" not in df.columns:
+        df = df.with_columns(pl.col("close").alias("adj_close")).select(
+            ["symbol","date","open","high","low","close","adj_close","volume","source"]
+        )
+    return df
+
 def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
     data = yf.download(
         symbol,
@@ -82,46 +117,39 @@ def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
         return None
 
     pdf = data.reset_index()
-
-    # 1) Aplanar columnas si vienen como MultiIndex
     if isinstance(pdf.columns, pd.MultiIndex):
         pdf.columns = [
             "_".join([str(x) for x in tup if x is not None and str(x) != ""]).strip()
             for tup in pdf.columns.to_list()
         ]
+    else:
+        pdf.columns = [str(c) for c in pdf.columns]
 
-    # 2) Detectar nombre de la columna de fecha
     cols = list(pdf.columns)
-    candidates = [c for c in ["Date", "Datetime", "date", "datetime"] if c in cols]
-    date_col = candidates[0] if candidates else cols[0]  # fallback a la primera columna
+    date_col = _find_col_by_prefix(cols, ["Date", "Datetime", "date", "datetime"]) or cols[0]
 
-    # 3) Renombrar de forma segura (solo si existe)
-    rename_pairs = []
+    rename_map = {}
     if date_col in pdf.columns:
-        rename_pairs.append((date_col, "date"))
+        rename_map[date_col] = "date"
     mapping = {
-        "Open": "open",
-        "High": "high",
-        "Low": "low",
-        "Close": "close",
-        "Adj Close": "adj_close",
-        "Volume": "volume",
+        "open":      ["Open"],
+        "high":      ["High"],
+        "low":       ["Low"],
+        "close":     ["Close"],
+        "adj_close": ["Adj Close", "AdjClose", "Adjusted Close"],
+        "volume":    ["Volume", "Vol"],
     }
-    for old, new in mapping.items():
-        if old in pdf.columns:
-            rename_pairs.append((old, new))
+    for std_name, aliases in mapping.items():
+        csrc = _find_col_by_prefix(cols, aliases)
+        if csrc is not None:
+            rename_map[csrc] = std_name
 
-    # 4) Convertir a Polars y aplicar renombrados protegidos
-    df = pl.from_pandas(pdf)
-    for old, new in rename_pairs:
-        if old in df.columns:
-            df = df.rename({old: new})
+    df = pl.from_pandas(pdf).rename(rename_map)
 
-    # 5) Casteos con tolerancia
     exprs = []
     if "date" in df.columns:
         exprs.append(pl.col("date").cast(pl.Date, strict=False).alias("date"))
-    for c in ("open", "high", "low", "close", "adj_close"):
+    for c in ("open","high","low","close","adj_close"):
         if c in df.columns:
             exprs.append(pl.col(c).cast(pl.Float64, strict=False).alias(c))
     if "volume" in df.columns:
@@ -129,20 +157,28 @@ def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
     if exprs:
         df = df.with_columns(exprs)
 
-    # 6) Si falta adj_close, usar close
     if "adj_close" not in df.columns and "close" in df.columns:
         df = df.with_columns(pl.col("close").alias("adj_close"))
+    if "close" not in df.columns and "adj_close" in df.columns:
+        df = df.with_columns(pl.col("adj_close").alias("close"))
 
-    # 7) Añadir metadata, seleccionar columnas presentes y filtrar válidos
     df = df.with_columns([pl.lit(symbol).alias("symbol"), pl.lit("yahoo").alias("source")])
-    wanted = ["symbol", "date", "open", "high", "low", "close", "adj_close", "volume", "source"]
+
+    wanted = ["symbol","date","open","high","low","close","adj_close","volume","source"]
     df = df.select([c for c in wanted if c in df.columns])
 
     conds = []
     if "date" in df.columns:
         conds.append(pl.col("date").is_not_null())
-    if "close" in df.columns:
-        conds.append(pl.col("close").is_not_null())
+    price_any = []
+    for c in ("close", "adj_close", "open", "high", "low"):
+        if c in df.columns:
+            price_any.append(pl.col(c).is_not_null())
+    if price_any:
+        pcond = price_any[0]
+        for k in price_any[1:]:
+            pcond = pcond | k
+        conds.append(pcond)
     if conds:
         cond = conds[0]
         for k in conds[1:]:
@@ -150,7 +186,6 @@ def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
         df = df.filter(cond)
 
     return df if df.height > 0 else None
-
 
 def fetch_symbol(symbol: str) -> pl.DataFrame | None:
     df = _yahoo_fetch(symbol, START_DATE)
@@ -161,6 +196,8 @@ def fetch_symbol(symbol: str) -> pl.DataFrame | None:
 def normalize_schema(df: pl.DataFrame) -> pl.DataFrame:
     if "adj_close" not in df.columns and "close" in df.columns:
         df = df.with_columns(pl.col("close").alias("adj_close"))
+    if "close" not in df.columns and "adj_close" in df.columns:
+        df = df.with_columns(pl.col("adj_close").alias("close"))
     wanted = ["symbol","date","open","high","low","close","adj_close","volume","source"]
     return df.select([c for c in wanted if c in df.columns])
 
@@ -169,20 +206,44 @@ def dedupe_sort(df: pl.DataFrame) -> pl.DataFrame:
               .sort(["symbol","date"])
               .with_columns(pl.col("date").cast(pl.Date, strict=False)))
 
-# ------------------------
-# Autenticación Sheets
-# ------------------------
-def _ensure_credentials_file() -> str:
-    p = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if p and os.path.isfile(p):
-        return p
-    b64 = os.environ.get("GCP_SERVICE_ACCOUNT_JSON_B64")
-    if b64:
-        data = base64.b64decode(b64)
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        tmp.write(data); tmp.flush(); tmp.close()
-        return tmp.name
-    raise RuntimeError("Credenciales no encontradas. Configure GOOGLE_APPLICATION_CREDENTIALS o GCP_SERVICE_ACCOUNT_JSON_B64.")
+# =========================
+# Autenticación Sheets (GitHub Secrets)
+# =========================
+def _get_credentials_from_secrets() -> Credentials:
+    """
+    Obtiene credenciales directamente de variables de entorno:
+      - GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo)
+      - GCP_SERVICE_ACCOUNT_JSON_B64 (base64 del JSON)
+    Construye un objeto Credentials sin tocar el filesystem.
+    """
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if not raw:
+        b64 = os.environ.get("GCP_SERVICE_ACCOUNT_JSON_B64")
+        if b64:
+            raw = base64.b64decode(b64).decode("utf-8")
+
+    if not raw:
+        raise RuntimeError("Falta definir GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo) o GCP_SERVICE_ACCOUNT_JSON_B64 (Base64).")
+
+    info = None
+    # Evita logs: no imprimir ni validar con prints
+    try:
+        import json
+        info = json.loads(raw)
+    except Exception as e:
+        raise RuntimeError("El contenido de las credenciales no es un JSON válido.") from e
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(info, scopes=scopes)
+    # Refresh temprano para detectar skew de reloj en el runner
+    try:
+        creds.refresh(Request())
+    except _RefreshError as e:
+        raise RuntimeError(
+            "No se pudo refrescar el token del Service Account. "
+            "Revise desfase de reloj en el runner o la validez del JWT."
+        ) from e
+    return creds
 
 def _open_or_create_worksheet(gc: gspread.Client, sheet_id: str, worksheet_name: str, header_cols: list[str]) -> gspread.Worksheet:
     sh = gc.open_by_key(sheet_id)
@@ -201,32 +262,63 @@ def _read_existing(ws: gspread.Worksheet, cols: list[str]) -> pd.DataFrame:
     for c in cols:
         if c not in df.columns:
             df[c] = pd.Series(dtype="float64")
+    if "symbol" in df.columns:
+        df["symbol"] = df["symbol"].astype("string")
     if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
     if "volume" in df.columns:
         df["volume"] = pd.to_numeric(df["volume"], errors="coerce").astype("Int64")
     for c in ["open","high","low","close","adj_close","yhat","yhat_lo","yhat_hi","last_obs_value"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
+    if "ingestion_ts" in df.columns:
+        df["ingestion_ts"] = pd.to_datetime(df["ingestion_ts"], errors="coerce")
+    if "last_obs_date" in df.columns:
+        df["last_obs_date"] = pd.to_datetime(df["last_obs_date"], errors="coerce").dt.date
+    if "fc_h" in df.columns:
+        df["fc_h"] = pd.to_numeric(df["fc_h"], errors="coerce").astype("Int64")
     return df
 
 def _write_full(ws: gspread.Worksheet, pdf: pd.DataFrame) -> None:
+    price_cols = [c for c in ["open","high","low","close","adj_close"] if c in pdf.columns]
+    if price_cols:
+        mask_any = ~pdf[price_cols].isna().all(axis=1)
+        pdf = pdf.loc[mask_any].copy()
     set_with_dataframe(ws, pdf, include_index=False, include_column_header=True, resize=True)
 
-def _next_business_days(start_date: dt.date, n: int) -> list[dt.date]:
-    out = []; d = start_date
-    while len(out) < n:
-        d = d + dt.timedelta(days=1)
-        if d.weekday() < 5:
-            out.append(d)
-    return out
+def _coerce_hist_types(pdf: pd.DataFrame) -> pd.DataFrame:
+    if "symbol" in pdf.columns:
+        pdf["symbol"] = pdf["symbol"].astype("string")
+    if "date" in pdf.columns:
+        pdf["date"] = pd.to_datetime(pdf["date"], errors="coerce").dt.date
+    for c in ["open","high","low","close","adj_close"]:
+        if c in pdf.columns:
+            pdf[c] = pd.to_numeric(pdf[c], errors="coerce")
+    if "volume" in pdf.columns:
+        pdf["volume"] = pd.to_numeric(pdf["volume"], errors="coerce").astype("Int64")
+    if "ingestion_ts" in pdf.columns:
+        pdf["ingestion_ts"] = pd.to_datetime(pdf["ingestion_ts"], errors="coerce")
+    return pdf
 
-def _safe_log(x: pd.Series) -> pd.Series:
-    return np.log(x.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+def _coerce_fc_types(pdf: pd.DataFrame) -> pd.DataFrame:
+    if "symbol" in pdf.columns:
+        pdf["symbol"] = pdf["symbol"].astype("string")
+    if "date" in pdf.columns:
+        pdf["date"] = pd.to_datetime(pdf["date"], errors="coerce").dt.date
+    for c in ["yhat","yhat_lo","yhat_hi","last_obs_value"]:
+        if c in pdf.columns:
+            pdf[c] = pd.to_numeric(pdf[c], errors="coerce")
+    if "last_obs_date" in pdf.columns:
+        pdf["last_obs_date"] = pd.to_datetime(pdf["last_obs_date"], errors="coerce").dt.date
+    if "fc_h" in pdf.columns:
+        pdf["fc_h"] = pd.to_numeric(pdf["fc_h"], errors="coerce").astype("Int64")
+    if "ingestion_ts" in pdf.columns:
+        pdf["ingestion_ts"] = pd.to_datetime(pdf["ingestion_ts"], errors="coerce")
+    return pdf
 
-# ------------------------
-# Selección ARIMA por AICc (statsmodels)
-# ------------------------
+# =========================
+# Modelado y pronóstico
+# =========================
 def _aicc(llf: float, n_obs: int, k_params: int) -> float:
     if n_obs - k_params - 1 <= 0:
         return np.inf
@@ -239,7 +331,8 @@ def _fit_arima_best_aicc(returns: np.ndarray, max_p: int = 3, max_q: int = 3):
     for p in range(0, max_p + 1):
         for q in range(0, max_q + 1):
             try:
-                model = ARIMA(y, order=(p, 0, q), trend="c", enforce_stationarity=False, enforce_invertibility=False)
+                model = ARIMA(y, order=(p, 0, q), trend="c",
+                              enforce_stationarity=False, enforce_invertibility=False)
                 res = model.fit(method="statespace", disp=0)
                 k = res.params.shape[0]
                 val = _aicc(res.llf, n, k)
@@ -279,8 +372,8 @@ def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.Data
     res, order = _fit_arima_best_aicc(returns, max_p=3, max_q=3)
 
     last_date = d["date"].iloc[-1]
-    last_val = d["adj_close"].iloc[-1]
-    fc_dates = _next_business_days(last_date, horizon)
+    last_val  = d["adj_close"].iloc[-1]
+    fc_dates  = _next_business_days(last_date, horizon)
 
     if res is None:
         ky = min(60, max(2, len(returns)))
@@ -299,7 +392,7 @@ def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.Data
 
     fc = res.get_forecast(steps=horizon)
     mean_ret = fc.predicted_mean
-    conf = fc.conf_int(alpha=0.05)
+    conf     = fc.conf_int(alpha=0.05)
 
     cum_ret = np.cumsum(np.asarray(mean_ret))
     yhat = last_val * np.exp(cum_ret)
@@ -313,10 +406,11 @@ def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.Data
         "model_desc": [desc] * horizon
     })
 
-# ------------------------
-# Main
-# ------------------------
+# =========================
+# Flujo principal
+# =========================
 def main() -> None:
+    # 1) Descarga y normalización
     frames = []
     for s in SYMBOLS:
         df = fetch_symbol(s)
@@ -329,20 +423,30 @@ def main() -> None:
     hist = dedupe_sort(hist).with_columns(pl.lit(dt.datetime.utcnow()).alias("ingestion_ts"))
     pdf_hist = hist.to_pandas()
 
-    creds_path = _ensure_credentials_file()
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    credentials = Credentials.from_service_account_file(creds_path, scopes=scopes)
+    # 2) Autenticación GSheet desde secrets (sin archivos intermedios)
+    credentials = _get_credentials_from_secrets()
     gc = gspread.authorize(credentials)
 
-    ws_hist = _open_or_create_worksheet(gc, SHEET_ID, WS_DATA,
-        ["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"])
-    exist_hist = _read_existing(ws_hist, ["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"])
-    merged_hist = (pd.concat([exist_hist, pdf_hist], axis=0, ignore_index=True)
-                     .sort_values(["symbol","date","ingestion_ts"])
-                     .drop_duplicates(subset=["symbol","date"], keep="last"))
+    # 3) Upsert de histórico en 'indices' con tipos consistentes y SIN filas vacías
+    ws_hist = _open_or_create_worksheet(
+        gc, SHEET_ID, WS_DATA,
+        ["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]
+    )
+    exist_hist = _read_existing(
+        ws_hist, ["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]
+    )
+    pdf_hist   = _coerce_hist_types(pdf_hist)
+    exist_hist = _coerce_hist_types(exist_hist)
+
+    merged_hist = (
+        pd.concat([exist_hist, pdf_hist], axis=0, ignore_index=True)
+          .sort_values(["symbol","date","ingestion_ts"], kind="mergesort")
+          .drop_duplicates(subset=["symbol","date"], keep="last")
+    )
     merged_hist = merged_hist[["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]]
     _write_full(ws_hist, merged_hist)
 
+    # 4) Pronósticos por símbolo y upsert en 'proyecciones_30d'
     fc_all = []
     for s in SYMBOLS:
         fc = forecast_one_symbol(merged_hist, s, HORIZON)
@@ -352,14 +456,28 @@ def main() -> None:
         return
     pdf_fc = pd.concat(fc_all, axis=0, ignore_index=True)
     pdf_fc["ingestion_ts"] = dt.datetime.utcnow()
+    pdf_fc = _coerce_fc_types(pdf_fc)
 
-    ws_fc = _open_or_create_worksheet(gc, SHEET_ID, WS_FC,
-        ["symbol","date","fc_h","method","yhat","yhat_lo","yhat_hi","last_obs_date","last_obs_value","model_desc","ingestion_ts"])
-    exist_fc = _read_existing(ws_fc, ["symbol","date","fc_h","method","yhat","yhat_lo","yhat_hi","last_obs_date","last_obs_value","model_desc","ingestion_ts"])
-    merged_fc = (pd.concat([exist_fc, pdf_fc], axis=0, ignore_index=True)
-                   .sort_values(["symbol","date","fc_h","ingestion_ts"])
-                   .drop_duplicates(subset=["symbol","date","fc_h"], keep="last"))
-    merged_fc = merged_fc[["symbol","date","fc_h","method","yhat","yhat_lo","yhat_hi","last_obs_date","last_obs_value","model_desc","ingestion_ts"]]
+    ws_fc = _open_or_create_worksheet(
+        gc, SHEET_ID, WS_FC,
+        ["symbol","date","fc_h","method","yhat","yhat_lo","yhat_hi",
+         "last_obs_date","last_obs_value","model_desc","ingestion_ts"]
+    )
+    exist_fc = _read_existing(
+        ws_fc, ["symbol","date","fc_h","method","yhat","yhat_lo","yhat_hi",
+                "last_obs_date","last_obs_value","model_desc","ingestion_ts"]
+    )
+    exist_fc = _coerce_fc_types(exist_fc)
+
+    merged_fc = (
+        pd.concat([exist_fc, pdf_fc], axis=0, ignore_index=True)
+          .sort_values(["symbol","date","fc_h","ingestion_ts"], kind="mergesort")
+          .drop_duplicates(subset=["symbol","date","fc_h"], keep="last")
+    )
+    merged_fc = merged_fc[[
+        "symbol","date","fc_h","method","yhat","yhat_lo","yhat_hi",
+        "last_obs_date","last_obs_value","model_desc","ingestion_ts"
+    ]]
     _write_full(ws_fc, merged_fc)
 
 if __name__ == "__main__":

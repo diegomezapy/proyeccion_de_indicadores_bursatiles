@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Indicadores bursátiles · Analítica y proyección</title>
+  <meta name="description" content="Tablero interactivo con series históricas y proyección a 30 días desde Google Sheets.">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+  <style>
+    :root{ --bg:#0b1220; --card:#111a2b; --fg:#e6eaf2; --muted:#9fb0c3; --accent:#60a5fa; }
+    *{ box-sizing:border-box }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; background:var(--bg); color:var(--fg) }
+    header{ padding:1rem 1.25rem; border-bottom:1px solid #1b2942; background:linear-gradient(180deg,#0d1626 0%, #0b1220 100%) }
+    h1{ font-size:1.15rem; margin:0 }
+    .wrap{ max-width:1200px; margin:0 auto; padding:1rem 1.25rem }
+    .card{ background:var(--card); border:1px solid #1b2942; border-radius:16px; padding:1rem; box-shadow: 0 10px 24px rgba(0,0,0,.25) }
+    .grid{ display:grid; grid-template-columns:1fr; gap:1rem }
+    @media(min-width:900px){ .grid{ grid-template-columns: 300px 1fr } }
+    label{ display:block; font-size:.85rem; color:var(--muted); margin:.25rem 0 .5rem }
+    select, input[type="date"], input[type="url"]{ width:100%; background:#0e1728; color:var(--fg); border:1px solid #203150; border-radius:10px; padding:.5rem .6rem; outline:none }
+    .row{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem }
+    .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem }
+    .hint{ font-size:.8rem; color:var(--muted); margin-top:.4rem }
+    #chart{ width:100%; height:540px }
+    .kpi{ display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin-top:.6rem }
+    .kpi > div{ background:#0e1728; border:1px solid #203150; border-radius:10px; padding:.6rem }
+    .kpi h3{ margin:.1rem 0; font-size:1rem }
+    .kpi p{ margin:0; color:var(--muted); font-size:.85rem }
+    nav.tabs{ display:flex; gap:.6rem; margin-bottom:.6rem }
+    nav.tabs button{ background:#0e1728; color:var(--fg); border:1px solid #203150; border-radius:10px; padding:.5rem .8rem; cursor:pointer }
+    nav.tabs button.active{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(96,165,250,.2) }
+    section[hidden]{ display:none }
+    footer{ text-align:center; color:#8aa0ba; font-size:.8rem; padding:1.5rem 0 2rem }
+    a{ color:var(--accent); text-decoration:none }
+    a:hover{ text-decoration:underline }
+    .switch{ display:flex; align-items:center; gap:.5rem; margin:.4rem 0 }
+    input[type="checkbox"]{ accent-color:#60a5fa }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Indicadores bursátiles · Analítica y proyección (30 días)</h1>
+      <div class="hint">Fuente: Google Sheets. Actualización 06:00 (America/Guayaquil). Proyecciones ARIMA en retornos logarítmicos con AICc.</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <nav class="tabs">
+      <button id="tabSerie" class="active" type="button">Serie y proyección</button>
+      <button id="tabMetodologia" type="button">Metodología</button>
+    </nav>
+
+    <section id="viewSerie" class="grid">
+      <aside class="card">
+        <label for="sheetUrl">URL JSON, hoja “indices”</label>
+        <input id="sheetUrl" type="url"
+               value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices" />
+
+        <label for="fcUrl">URL JSON, hoja “proyecciones_30d”</label>
+        <input id="fcUrl" type="url"
+               value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d" />
+
+        <label for="symbol">Símbolo</label>
+        <select id="symbol"></select>
+
+        <div class="row3">
+          <div>
+            <label for="metric">Métrica</label>
+            <select id="metric">
+              <option value="close">Close</option>
+              <option value="adj_close" selected>Adj Close</option>
+            </select>
+          </div>
+          <div>
+            <label for="ret">Serie</label>
+            <select id="ret">
+              <option value="level" selected>Nivel (precio)</option>
+              <option value="ret_d">Retorno diario</option>
+              <option value="ret_cum">Retorno acumulado</option>
+            </select>
+          </div>
+          <div>
+            <label for="smooth">Suavizado</label>
+            <select id="smooth">
+              <option value="0" selected>Sin suavizado</option>
+              <option value="7">Media 7</option>
+              <option value="21">Media 21</option>
+              <option value="63">Media 63</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="dateFrom">Desde</label>
+            <input id="dateFrom" type="date" />
+          </div>
+          <div>
+            <label for="dateTo">Hasta</label>
+            <input id="dateTo" type="date" />
+          </div>
+        </div>
+
+        <div class="switch">
+          <input id="showFc" type="checkbox" checked />
+          <label for="showFc">Mostrar proyección 30 días</label>
+        </div>
+        <div class="switch">
+          <input id="showBands" type="checkbox" checked />
+          <label for="showBands">Mostrar bandas de confianza</label>
+        </div>
+
+        <div class="hint">Repo: <a href="https://github.com/diegomezapy/proyeccion_de_indicadores_bursatiles" target="_blank" rel="noopener">proyeccion_de_indicadores_bursatiles</a></div>
+      </aside>
+
+      <section class="card">
+        <div id="chart"></div>
+        <div class="kpi">
+          <div><h3 id="kpi_last">—</h3><p>Último valor</p></div>
+          <div><h3 id="kpi_mtd">—</h3><p>Variación MTD</p></div>
+          <div><h3 id="kpi_ytd">—</h3><p>Variación YTD</p></div>
+        </div>
+      </section>
+    </section>
+
+    <section id="viewMetodologia" class="card" hidden>
+      <h2 style="margin-top:0">Metodología de proyección</h2>
+      <p>Para cada índice se considera la serie diaria de <em>precio ajustado</em> <code>adj_close</code>. Se modelan los <strong>retornos logarítmicos</strong>,
+         \( r_t = \log(P_t) - \log(P_{t-1}) \), con un modelo <strong>ARIMA</strong> seleccionado automáticamente por AICc. El horizonte es de 30 días hábiles.</p>
+      <p>La proyección en nivel se obtiene por integración exponencial de los retornos pronosticados:
+         \( \hat{P}_{t+h} = P_t \exp\!\left(\sum_{j=1}^h \hat{r}_{t+j}\right) \).
+         Las bandas de confianza se derivan de los intervalos sobre retornos, trasladadas al nivel con una aproximación log-normal.</p>
+      <p>En series con historial insuficiente se aplica un método <em>naive drift</em> sobre el log-precio, con deriva igual al promedio de retornos recientes y
+         varianza estimada empíricamente.</p>
+      <h3>Campos generados</h3>
+      <ul>
+        <li><code>symbol, date, fc_h</code>: identificadores y horizonte</li>
+        <li><code>yhat, yhat_lo, yhat_hi</code>: pronóstico puntual y bandas 95%</li>
+        <li><code>last_obs_date, last_obs_value</code>: ancla del último cierre observado</li>
+        <li><code>method, model_desc</code>: trazabilidad del enfoque aplicado</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>Datos: Google Sheets. Gráficos: Plotly. ©</footer>
+
+  <script>
+    function toISO(d){ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${da}`; }
+    function rollingMean(arr,k){ if(k<=1) return arr.slice(); const out=new Array(arr.length).fill(null); let s=0,q=[]; for(let i=0;i<arr.length;i++){ const v=arr[i]==null?NaN:Number(arr[i]); q.push(v); s+=v; if(q.length>k) s-=q.shift(); if(q.length===k) out[i]=s/k; } return out; }
+    function formatPct(x){ if(x==null||isNaN(x)) return "—"; return (x*100).toFixed(2)+"%"; }
+
+    async function fetchGvizJSON(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      const text = await res.text();
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      const json = JSON.parse(text.slice(start, end + 1));
+      return json;
+    }
+
+    function gvizToObjects(gviz) {
+      const cols = gviz.table.cols.map(c => c.label || c.id);
+      const out = [];
+      for (const row of gviz.table.rows) {
+        const obj = {};
+        row.c.forEach((cell, i) => {
+          obj[cols[i]] = cell ? cell.v : null;
+        });
+        out.push(obj);
+      }
+      return out;
+    }
+
+    function coerceHistoricalRows(rows) {
+      rows.forEach(r => {
+        r.symbol = r.symbol;
+        r.date = r.date ? new Date(r.date) : null;
+        ["open","high","low","close","adj_close","volume"].forEach(k => {
+          r[k] = r[k] == null || r[k] === "" ? null : Number(r[k]);
+        });
+      });
+      rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
+      return rows;
+    }
+
+    function coerceForecastRows(rows) {
+      rows.forEach(r => {
+        r.symbol = r.symbol;
+        r.date = r.date ? new Date(r.date) : null;
+        r.fc_h = r.fc_h == null || r.fc_h === "" ? null : Number(r.fc_h);
+        ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => {
+          r[k] = r[k] == null || r[k] === "" ? null : Number(r[k]);
+        });
+        r.last_obs_date = r.last_obs_date ? new Date(r.last_obs_date) : null;
+      });
+      rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || a.fc_h - b.fc_h);
+      return rows;
+    }
+
+    let DATA=[], FC=[], SYMBOLS=[];
+    const elUrl=document.getElementById('sheetUrl');
+    const elFcUrl=document.getElementById('fcUrl');
+    const elSymbol=document.getElementById('symbol');
+    const elMetric=document.getElementById('metric');
+    const elRet=document.getElementById('ret');
+    const elSmooth=document.getElementById('smooth');
+    const elFrom=document.getElementById('dateFrom');
+    const elTo=document.getElementById('dateTo');
+
+    const tabSerie=document.getElementById('tabSerie');
+    const tabMetod=document.getElementById('tabMetodologia');
+    const viewSerie=document.getElementById('viewSerie');
+    const viewMetod=document.getElementById('viewMetodologia');
+
+    tabSerie.addEventListener('click', ()=>{ tabSerie.classList.add('active'); tabMetod.classList.remove('active'); viewSerie.hidden=false; viewMetod.hidden=true; });
+    tabMetod.addEventListener('click', ()=>{ tabMetod.classList.add('active'); tabSerie.classList.remove('active'); viewSerie.hidden=true; viewMetod.hidden=false; });
+
+    function updateKPIs(records, metric){
+      if(!records.length){ document.getElementById('kpi_last').textContent="—"; document.getElementById('kpi_mtd').textContent="—"; document.getElementById('kpi_ytd').textContent="—"; return; }
+      const last = records[records.length-1][metric];
+      const d = records[records.length-1].date;
+      const firstMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mRecords = records.filter(r=> r.date>=firstMonth && r[metric]!=null);
+      let mtd=null; if(mRecords.length>=2){ const base=mRecords[0][metric]; const end=mRecords[mRecords.length-1][metric]; mtd = base? (end/base - 1): null; }
+      const firstYear = new Date(d.getFullYear(), 0, 1);
+      const yRecords = records.filter(r=> r.date>=firstYear && r[metric]!=null);
+      let ytd=null; if(yRecords.length>=2){ const base=yRecords[0][metric]; const end=yRecords[yRecords.length-1][metric]; ytd = base? (end/base - 1): null; }
+      document.getElementById('kpi_last').textContent = last==null? "—" : last.toLocaleString(undefined,{maximumFractionDigits:2});
+      document.getElementById('kpi_mtd').textContent = formatPct(mtd);
+      document.getElementById('kpi_ytd').textContent = formatPct(ytd);
+    }
+
+    function computeSeries(records, metric, retMode, smoothK){
+      const x = records.map(r=>r.date);
+      const y0 = records.map(r=>r[metric]);
+      let y = y0.slice();
+      if(retMode==="ret_d"){ y = y.map((v,i)=> i===0||v==null||y0[i-1]==null? null : (v/y0[i-1]-1)); }
+      else if(retMode==="ret_cum"){
+        let acc=1;
+        y = y.map((v,i)=>{ if(i===0||v==null||y0[i-1]==null) return 0; const r=v/y0[i-1]-1; acc*= (1+r); return acc-1; });
+      }
+      const k=Number(smoothK);
+      if(k>1 && retMode==="level"){ const ysm = rollingMean(y,k); return {x, y: ysm}; }
+      return {x,y};
+    }
+
+    function render(){
+      const sym = elSymbol.value || (SYMBOLS[0] || "");
+      const metric = elMetric.value;
+      const retMode = elRet.value;
+      const smoothK = elSmooth.value;
+      const dFrom = elFrom.value? new Date(elFrom.value) : new Date(0);
+      const dTo = elTo.value? new Date(elTo.value) : new Date();
+
+      const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
+      updateKPIs(base, metric);
+      const {x, y} = computeSeries(base, metric, retMode, smoothK);
+      const traces = [{
+        x, y, mode:"lines", line:{width:2}, name:"Histórico", hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+      }];
+
+      const fc = FC.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo);
+      if(fc.length){
+        const fcX = fc.map(r=> r.date);
+        const fcY = fc.map(r=> r.yhat);
+        traces.push({
+          x: fcX, y: fcY, mode:"lines", line:{width:2, dash:"dash"}, name:"Proyección 30d",
+          hovertemplate:"%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+        });
+        const lo = fc.map(r=> r.yhat_lo);
+        const hi = fc.map(r=> r.yhat_hi);
+        traces.push({
+          x: fcX.concat(fcX.slice().reverse()),
+          y: hi.concat(lo.slice().reverse()),
+          fill: "toself", fillcolor: "rgba(96,165,250,0.15)", line:{width:0},
+          name: "IC 95%", hoverinfo:"skip"
+        });
+      }
+
+      const layout = {
+        margin:{l:60,r:20,t:10,b:40},
+        paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+        xaxis:{ showgrid:false, zeroline:false },
+        yaxis:{ showgrid:false, zeroline:false }
+      };
+      Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
+    }
+
+    async function load() {
+      const histJson = await fetchGvizJSON(document.getElementById('sheetUrl').value);
+      const fcJson   = await fetchGvizJSON(document.getElementById('fcUrl').value);
+      const histRows = coerceHistoricalRows(gvizToObjects(histJson));
+      const fcRows   = coerceForecastRows(gvizToObjects(fcJson));
+      DATA = histRows;
+      FC   = fcRows;
+      SYMBOLS = Array.from(new Set(histRows.map(r => r.symbol)));
+      document.getElementById('symbol').innerHTML =
+        SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
+      const maxDate = histRows.reduce((m, r) => r.date > m ? r.date : m, new Date(0));
+      const minDate = new Date(maxDate); minDate.setFullYear(minDate.getFullYear() - 3);
+      document.getElementById('dateFrom').value = toISO(minDate);
+      document.getElementById('dateTo').value   = toISO(maxDate);
+      render();
+    }
+
+    window.addEventListener("DOMContentLoaded", ()=>{
+      ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo"]
+        .map(id=>document.getElementById(id))
+        .forEach(el=> el && el.addEventListener("change", render));
+      load();
+    });
+  </script>
+</body>
+</html>

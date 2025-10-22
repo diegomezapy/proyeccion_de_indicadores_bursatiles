@@ -1,6 +1,6 @@
 # fetch_and_forecast_indices_to_gsheet.py
 from __future__ import annotations
-import os, io, base64, datetime as dt, urllib.request
+import os, io, base64, datetime as dt, urllib.request, json
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -20,7 +20,7 @@ WS_DATA    = "indices"
 WS_FC      = "proyecciones_30d"
 SYMBOLS    = ["^GSPC","^IXIC","^DJI","^FTSE","^IBEX","^BVSP","^MERV","^VIX"]
 START_DATE = dt.date(1980, 1, 1)
-HORIZON    = 30  # pasos de pronóstico
+HORIZON    = 30  # días hábiles
 
 # =========================
 # Utilidades generales
@@ -52,31 +52,42 @@ def _safe_log(x: pd.Series) -> pd.Series:
 # =========================
 # Descarga de datos
 # =========================
-def _stooq_fallback(symbol: str) -> pl.DataFrame | None:
-    mapping = {
-        "^GSPC": "^spx", "^IXIC": "^ixic", "^DJI": "^dji", "^FTSE": "^ftse",
-        "^IBEX": "^ibex", "^BVSP": "^bvsp", "^MERV": "^merv", "^VIX": "^vix"
-    }
-    s = mapping.get(symbol)
+# Fuente primaria: Stooq (más estable en Actions para índices con '^')
+_STOOQ_MAP = {
+    "^GSPC": "^spx", "^IXIC": "^ixic", "^DJI": "^dji", "^FTSE": "^ftse",
+    "^IBEX": "^ibex", "^BVSP": "^bvsp", "^MERV": "^merv", "^VIX": "^vix"
+}
+
+def _stooq_fetch(symbol: str) -> pl.DataFrame | None:
+    s = _STOOQ_MAP.get(symbol)
     if not s:
         return None
-
     url = f"https://stooq.com/q/d/l/?s={s}&i=d"
-    with urllib.request.urlopen(url, timeout=30) as resp:
-        raw = resp.read()
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            raw = resp.read()
+    except Exception:
+        return None
     if not raw:
         return None
 
     nulls = ["", "NA", "NaN", "null", "NULL", "N/A", "2290404134.7576"]
-    df_txt = pl.read_csv(
-        io.BytesIO(raw),
-        infer_schema_length=10000,
-        ignore_errors=True,
-        null_values=nulls,
-        dtypes={"Date": pl.Utf8, "Open": pl.Utf8, "High": pl.Utf8, "Low": pl.Utf8, "Close": pl.Utf8, "Volume": pl.Utf8},
-        try_parse_dates=False,
-        encoding="utf8-lossy"
-    )
+    try:
+        df_txt = pl.read_csv(
+            io.BytesIO(raw),
+            infer_schema_length=10000,
+            ignore_errors=True,
+            null_values=nulls,
+            schema_overrides={
+                "Date": pl.Utf8, "Open": pl.Utf8, "High": pl.Utf8,
+                "Low": pl.Utf8, "Close": pl.Utf8, "Volume": pl.Utf8
+            },
+            try_parse_dates=False,
+            encoding="utf8-lossy"
+        )
+    except Exception:
+        return None
+
     if "Date" not in df_txt.columns or "Close" not in df_txt.columns:
         return None
 
@@ -94,25 +105,32 @@ def _stooq_fallback(symbol: str) -> pl.DataFrame | None:
         pl.lit("stooq").alias("source")
     ]).select(["symbol","date","open","high","low","close","volume","source"])
 
-    df = df.filter(pl.col("date").is_not_null() & pl.col("close").is_not_null())
-    if df.height == 0:
-        return None
-
-    if "adj_close" not in df.columns:
-        df = df.with_columns(pl.col("close").alias("adj_close")).select(
-            ["symbol","date","open","high","low","close","adj_close","volume","source"]
-        )
-    return df
-
-def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
-    data = yf.download(
-        symbol,
-        start=start.isoformat(),
-        progress=False,
-        auto_adjust=False,
-        threads=True,
-        group_by="column"
+    # descartar filas sin fecha o sin precio
+    price_any = pl.any_horizontal(
+        [pl.col(c).is_not_null() for c in ["close","open","high","low"] if c in df.columns]
     )
+    df = df.filter(pl.col("date").is_not_null() & price_any)
+
+    # asegurar adj_close
+    if "adj_close" not in df.columns:
+        df = df.with_columns(pl.col("close").alias("adj_close"))
+    df = df.select(["symbol","date","open","high","low","close","adj_close","volume","source"])
+
+    return df if df.height > 0 else None
+
+def _yahoo_fetch(symbol: str) -> pl.DataFrame | None:
+    try:
+        data = yf.download(
+            symbol,
+            start=START_DATE.isoformat(),
+            interval="1d",
+            progress=False,
+            auto_adjust=False,
+            threads=True,
+            group_by="column"
+        )
+    except Exception:
+        return None
     if data is None or data.empty:
         return None
 
@@ -167,31 +185,21 @@ def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
     wanted = ["symbol","date","open","high","low","close","adj_close","volume","source"]
     df = df.select([c for c in wanted if c in df.columns])
 
-    conds = []
-    if "date" in df.columns:
-        conds.append(pl.col("date").is_not_null())
-    price_any = []
-    for c in ("close", "adj_close", "open", "high", "low"):
-        if c in df.columns:
-            price_any.append(pl.col(c).is_not_null())
-    if price_any:
-        pcond = price_any[0]
-        for k in price_any[1:]:
-            pcond = pcond | k
-        conds.append(pcond)
-    if conds:
-        cond = conds[0]
-        for k in conds[1:]:
-            cond = cond & k
-        df = df.filter(cond)
+    # filtrar filas sin fecha o sin precio
+    price_any = pl.any_horizontal(
+        [pl.col(c).is_not_null() for c in ["close","adj_close","open","high","low"] if c in df.columns]
+    )
+    df = df.filter(pl.col("date").is_not_null() & price_any)
 
     return df if df.height > 0 else None
 
 def fetch_symbol(symbol: str) -> pl.DataFrame | None:
-    df = _yahoo_fetch(symbol, START_DATE)
+    # Stooq primero (más confiable en Actions para índices con “^”)
+    df = _stooq_fetch(symbol)
     if df is not None and df.height > 0:
         return df
-    return _stooq_fallback(symbol)
+    # Respaldo Yahoo
+    return _yahoo_fetch(symbol)
 
 def normalize_schema(df: pl.DataFrame) -> pl.DataFrame:
     if "adj_close" not in df.columns and "close" in df.columns:
@@ -207,41 +215,29 @@ def dedupe_sort(df: pl.DataFrame) -> pl.DataFrame:
               .with_columns(pl.col("date").cast(pl.Date, strict=False)))
 
 # =========================
-# Autenticación Sheets (GitHub Secrets)
+# Autenticación Sheets (Secrets)
 # =========================
 def _get_credentials_from_secrets() -> Credentials:
-    """
-    Obtiene credenciales directamente de variables de entorno:
-      - GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo)
-      - GCP_SERVICE_ACCOUNT_JSON_B64 (base64 del JSON)
-    Construye un objeto Credentials sin tocar el filesystem.
-    """
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if not raw:
         b64 = os.environ.get("GCP_SERVICE_ACCOUNT_JSON_B64")
         if b64:
             raw = base64.b64decode(b64).decode("utf-8")
-
     if not raw:
         raise RuntimeError("Falta definir GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo) o GCP_SERVICE_ACCOUNT_JSON_B64 (Base64).")
 
-    info = None
-    # Evita logs: no imprimir ni validar con prints
     try:
-        import json
         info = json.loads(raw)
     except Exception as e:
         raise RuntimeError("El contenido de las credenciales no es un JSON válido.") from e
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(info, scopes=scopes)
-    # Refresh temprano para detectar skew de reloj en el runner
     try:
         creds.refresh(Request())
     except _RefreshError as e:
         raise RuntimeError(
-            "No se pudo refrescar el token del Service Account. "
-            "Revise desfase de reloj en el runner o la validez del JWT."
+            "No se pudo refrescar el token del Service Account. Revise desfase de reloj o validez del JWT."
         ) from e
     return creds
 
@@ -310,7 +306,7 @@ def _coerce_fc_types(pdf: pd.DataFrame) -> pd.DataFrame:
             pdf[c] = pd.to_numeric(pdf[c], errors="coerce")
     if "last_obs_date" in pdf.columns:
         pdf["last_obs_date"] = pd.to_datetime(pdf["last_obs_date"], errors="coerce").dt.date
-    if "fc_h" in pdf.columns:
+    if "fc_h" in df.columns if (df:=pdf) is not None else []:  # guardia sintáctica
         pdf["fc_h"] = pd.to_numeric(pdf["fc_h"], errors="coerce").astype("Int64")
     if "ingestion_ts" in pdf.columns:
         pdf["ingestion_ts"] = pd.to_datetime(pdf["ingestion_ts"], errors="coerce")
@@ -427,7 +423,7 @@ def main() -> None:
     credentials = _get_credentials_from_secrets()
     gc = gspread.authorize(credentials)
 
-    # 3) Upsert de histórico en 'indices' con tipos consistentes y SIN filas vacías
+    # 3) Upsert de histórico en 'indices'
     ws_hist = _open_or_create_worksheet(
         gc, SHEET_ID, WS_DATA,
         ["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]
@@ -446,7 +442,7 @@ def main() -> None:
     merged_hist = merged_hist[["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]]
     _write_full(ws_hist, merged_hist)
 
-    # 4) Pronósticos por símbolo y upsert en 'proyecciones_30d'
+    # 4) Pronósticos y upsert en 'proyecciones_30d'
     fc_all = []
     for s in SYMBOLS:
         fc = forecast_one_symbol(merged_hist, s, HORIZON)

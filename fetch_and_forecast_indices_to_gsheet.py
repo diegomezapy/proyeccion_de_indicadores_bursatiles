@@ -18,23 +18,67 @@ START_DATE = dt.date(1980, 1, 1)
 HORIZON = 30
 
 def _stooq_fallback(symbol: str) -> pl.DataFrame | None:
-    mapping = {"^GSPC":"^spx","^IXIC":"^ixic","^DJI":"^dji","^FTSE":"^ftse","^IBEX":"^ibex","^BVSP":"^bvsp","^MERV":"^merv","^VIX":"^vix"}
+    mapping = {
+        "^GSPC": "^spx", "^IXIC": "^ixic", "^DJI": "^dji", "^FTSE": "^ftse",
+        "^IBEX": "^ibex", "^BVSP": "^bvsp", "^MERV": "^merv", "^VIX": "^vix"
+    }
     s = mapping.get(symbol)
-    if not s: return None
+    if not s:
+        return None
+
     url = f"https://stooq.com/q/d/l/?s={s}&i=d"
     with urllib.request.urlopen(url, timeout=30) as resp:
         raw = resp.read()
-    if not raw: return None
-    df = pl.read_csv(io.BytesIO(raw))
-    df = df.rename({"Date":"date","Open":"open","High":"high","Low":"low","Close":"close","Volume":"volume"})
+    if not raw:
+        return None
+
+    # 1) leer de forma robusta: todo como texto, ignorar filas corruptas, ampliar inferencia
+    #    y marcar como nulos algunos “sentinel” problemáticos.
+    nulls = ["", "NA", "NaN", "null", "NULL", "N/A", "2290404134.7576"]
+    df_txt = pl.read_csv(
+        io.BytesIO(raw),
+        infer_schema_length=10000,
+        ignore_errors=True,
+        null_values=nulls,
+        dtypes={
+            "Date": pl.Utf8,
+            "Open": pl.Utf8,
+            "High": pl.Utf8,
+            "Low":  pl.Utf8,
+            "Close": pl.Utf8,
+            "Volume": pl.Utf8,
+        },
+        try_parse_dates=False,   # casteamos nosotros con control fino
+        encoding="utf8-lossy"    # tolerante con bytes extraños
+    )
+
+    # 2) normalizar encabezados esperados (algunos stooq devuelven minúsculas)
+    df_txt = df_txt.rename({
+        "Date": "Date", "Open": "Open", "High": "High",
+        "Low": "Low", "Close": "Close", "Volume": "Volume"
+    })
+
+    # 3) castear con control y suprimir errores al convertir
+    df = df_txt.with_columns([
+        pl.col("Date").str.strptime(pl.Date, "%Y-%m-%d", strict=False).alias("date"),
+        pl.col("Open").str.replace(",", "").cast(pl.Float64, strict=False).alias("open"),
+        pl.col("High").str.replace(",", "").cast(pl.Float64, strict=False).alias("high"),
+        pl.col("Low").str.replace(",", "").cast(pl.Float64, strict=False).alias("low"),
+        pl.col("Close").str.replace(",", "").cast(pl.Float64, strict=False).alias("close"),
+        pl.col("Volume").str.replace(",", "").cast(pl.Int64, strict=False).alias("volume"),
+    ]).select(["date", "open", "high", "low", "close", "volume"])
+
+    # 4) metadata y salida unificada
     df = df.with_columns([
-        pl.col("date").str.strptime(pl.Date, "%Y-%m-%d", strict=False),
-        pl.col(["open","high","low","close"]).cast(pl.Float64, strict=False),
-        pl.col("volume").cast(pl.Int64, strict=False),
         pl.lit(symbol).alias("symbol"),
         pl.lit("stooq").alias("source")
-    ]).select(["symbol","date","open","high","low","close","volume","source"])
-    return df
+    ]).select(["symbol", "date", "open", "high", "low", "close", "volume", "source"])
+
+    # 5) descartar filas sin fecha o close para evitar sorpresas más adelante
+    df = df.filter(pl.col("date").is_not_null() & pl.col("close").is_not_null())
+
+    return df if df.height > 0 else None
+
 
 def _yahoo_fetch(symbol: str, start: dt.date) -> pl.DataFrame | None:
     data = yf.download(symbol, start=start.isoformat(), progress=False, auto_adjust=False, threads=True)

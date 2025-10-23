@@ -21,6 +21,7 @@ WS_FC      = "proyecciones_30d"
 SYMBOLS    = ["^GSPC","^IXIC","^DJI","^FTSE","^IBEX","^BVSP","^MERV","^VIX"]
 START_DATE = dt.date(1980, 1, 1)
 HORIZON    = 30  # días hábiles
+W_DRIFT    = 252 # ventana para mu y sigma de log-retornos (fallback)
 
 # =========================
 # Utilidades generales
@@ -52,7 +53,6 @@ def _safe_log(x: pd.Series) -> pd.Series:
 # =========================
 # Descarga de datos
 # =========================
-# Fuente primaria: Stooq (más estable en Actions para índices con '^')
 _STOOQ_MAP = {
     "^GSPC": "^spx", "^IXIC": "^ixic", "^DJI": "^dji", "^FTSE": "^ftse",
     "^IBEX": "^ibex", "^BVSP": "^bvsp", "^MERV": "^merv", "^VIX": "^vix"
@@ -105,17 +105,14 @@ def _stooq_fetch(symbol: str) -> pl.DataFrame | None:
         pl.lit("stooq").alias("source")
     ]).select(["symbol","date","open","high","low","close","volume","source"])
 
-    # descartar filas sin fecha o sin precio
     price_any = pl.any_horizontal(
         [pl.col(c).is_not_null() for c in ["close","open","high","low"] if c in df.columns]
     )
     df = df.filter(pl.col("date").is_not_null() & price_any)
 
-    # asegurar adj_close
     if "adj_close" not in df.columns:
         df = df.with_columns(pl.col("close").alias("adj_close"))
     df = df.select(["symbol","date","open","high","low","close","adj_close","volume","source"])
-
     return df if df.height > 0 else None
 
 def _yahoo_fetch(symbol: str) -> pl.DataFrame | None:
@@ -181,24 +178,19 @@ def _yahoo_fetch(symbol: str) -> pl.DataFrame | None:
         df = df.with_columns(pl.col("adj_close").alias("close"))
 
     df = df.with_columns([pl.lit(symbol).alias("symbol"), pl.lit("yahoo").alias("source")])
-
     wanted = ["symbol","date","open","high","low","close","adj_close","volume","source"]
     df = df.select([c for c in wanted if c in df.columns])
 
-    # filtrar filas sin fecha o sin precio
     price_any = pl.any_horizontal(
         [pl.col(c).is_not_null() for c in ["close","adj_close","open","high","low"] if c in df.columns]
     )
     df = df.filter(pl.col("date").is_not_null() & price_any)
-
     return df if df.height > 0 else None
 
 def fetch_symbol(symbol: str) -> pl.DataFrame | None:
-    # Stooq primero (más confiable en Actions para índices con “^”)
     df = _stooq_fetch(symbol)
     if df is not None and df.height > 0:
         return df
-    # Respaldo Yahoo
     return _yahoo_fetch(symbol)
 
 def normalize_schema(df: pl.DataFrame) -> pl.DataFrame:
@@ -215,7 +207,7 @@ def dedupe_sort(df: pl.DataFrame) -> pl.DataFrame:
               .with_columns(pl.col("date").cast(pl.Date, strict=False)))
 
 # =========================
-# Autenticación Sheets (Secrets)
+# Autenticación Sheets
 # =========================
 def _get_credentials_from_secrets() -> Credentials:
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -224,21 +216,12 @@ def _get_credentials_from_secrets() -> Credentials:
         if b64:
             raw = base64.b64decode(b64).decode("utf-8")
     if not raw:
-        raise RuntimeError("Falta definir GOOGLE_SERVICE_ACCOUNT_JSON (JSON crudo) o GCP_SERVICE_ACCOUNT_JSON_B64 (Base64).")
+        raise RuntimeError("Falta GOOGLE_SERVICE_ACCOUNT_JSON o GCP_SERVICE_ACCOUNT_JSON_B64.")
 
-    try:
-        info = json.loads(raw)
-    except Exception as e:
-        raise RuntimeError("El contenido de las credenciales no es un JSON válido.") from e
-
+    info = json.loads(raw)
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(info, scopes=scopes)
-    try:
-        creds.refresh(Request())
-    except _RefreshError as e:
-        raise RuntimeError(
-            "No se pudo refrescar el token del Service Account. Revise desfase de reloj o validez del JWT."
-        ) from e
+    creds.refresh(Request())
     return creds
 
 def _open_or_create_worksheet(gc: gspread.Client, sheet_id: str, worksheet_name: str, header_cols: list[str]) -> gspread.Worksheet:
@@ -306,7 +289,7 @@ def _coerce_fc_types(pdf: pd.DataFrame) -> pd.DataFrame:
             pdf[c] = pd.to_numeric(pdf[c], errors="coerce")
     if "last_obs_date" in pdf.columns:
         pdf["last_obs_date"] = pd.to_datetime(pdf["last_obs_date"], errors="coerce").dt.date
-    if "fc_h" in df.columns if (df:=pdf) is not None else []:  # guardia sintáctica
+    if "fc_h" in pdf.columns:
         pdf["fc_h"] = pd.to_numeric(pdf["fc_h"], errors="coerce").astype("Int64")
     if "ingestion_ts" in pdf.columns:
         pdf["ingestion_ts"] = pd.to_datetime(pdf["ingestion_ts"], errors="coerce")
@@ -338,6 +321,11 @@ def _fit_arima_best_aicc(returns: np.ndarray, max_p: int = 3, max_q: int = 3):
                 pass
     return best["res"], best["order"]
 
+def _winsorize(arr: np.ndarray, p: float = 0.01) -> np.ndarray:
+    a = arr.copy()
+    lo, hi = np.nanquantile(a, [p, 1-p])
+    return np.clip(a, lo, hi)
+
 def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.DataFrame | None:
     d = pdf[(pdf["symbol"] == symbol) & pd.notna(pdf["adj_close"])].copy()
     if d.empty:
@@ -345,40 +333,64 @@ def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.Data
     d = d.sort_values("date")
     y = d["adj_close"].astype(float)
 
-    if y.notna().sum() < 50:
-        last_date = d["date"].iloc[-1]; last_val = y.iloc[-1]
-        fc_dates = _next_business_days(last_date, horizon)
-        ky = min(60, max(2, y.notna().sum() - 1))
-        r = _safe_log(y).diff()
-        mu = np.nanmean(r.tail(ky))
-        sigma = np.nanstd(r.tail(ky))
+    # log-precios y log-retornos
+    logp = _safe_log(y)
+    r = logp.diff().dropna()
+
+    # excluir símbolos con dinámica no log-normal (ej., VIX): deriva = 0
+    force_mu_zero = symbol.upper() in {"^VIX"}
+
+    if r.shape[0] < 50:
+        last_date = d["date"].iloc[-1]
+        last_val  = float(y.iloc[-1])
+        fc_dates  = _next_business_days(last_date, horizon)
+
+        ky = min(W_DRIFT, max(2, r.shape[0]))
+        r_tail = r.tail(ky).values.astype(float)
+        r_tail = _winsorize(r_tail, p=0.01)
+
+        mu = 0.0 if force_mu_zero else float(np.nanmean(r_tail))
+        sigma = float(np.nanstd(r_tail, ddof=1)) if ky > 1 else 0.0
         z = 1.96
-        yhat = last_val * np.exp(np.cumsum(np.repeat(mu, horizon)))
-        lo = last_val * np.exp(np.cumsum(np.repeat(mu - z * sigma, horizon)))
-        hi = last_val * np.exp(np.cumsum(np.repeat(mu + z * sigma, horizon)))
+        h = np.arange(1, horizon + 1, dtype=float)
+
+        cum_mu = mu * h
+        cum_sd = sigma * np.sqrt(h)
+
+        yhat = last_val * np.exp(cum_mu)
+        lo   = last_val * np.exp(cum_mu - z * cum_sd)
+        hi   = last_val * np.exp(cum_mu + z * cum_sd)
+
         return pd.DataFrame({
             "symbol": symbol, "date": fc_dates, "fc_h": list(range(1, horizon + 1)),
             "method": ["naive_drift_log"] * horizon, "yhat": yhat, "yhat_lo": lo, "yhat_hi": hi,
             "last_obs_date": last_date, "last_obs_value": last_val,
-            "model_desc": [f"Naive-drift en log con ventana={ky}"] * horizon
+            "model_desc": [f"Naive-drift en log (ventana={ky}, winsor=1%)"] * horizon
         })
 
-    logp = _safe_log(y)
-    returns = logp.diff().dropna().values
-    res, order = _fit_arima_best_aicc(returns, max_p=3, max_q=3)
+    # ARIMA(p,0,q) en retornos logarítmicos
+    r_np = r.values.astype(float)
+    r_np = _winsorize(r_np, p=0.01)
+    res, order = _fit_arima_best_aicc(r_np, max_p=3, max_q=3)
 
     last_date = d["date"].iloc[-1]
-    last_val  = d["adj_close"].iloc[-1]
+    last_val  = float(d["adj_close"].iloc[-1])
     fc_dates  = _next_business_days(last_date, horizon)
 
     if res is None:
-        ky = min(60, max(2, len(returns)))
-        mu = float(np.nanmean(returns[-ky:])) if ky > 0 else 0.0
-        sigma = float(np.nanstd(returns[-ky:])) if ky > 0 else 0.0
+        ky = min(W_DRIFT, max(2, r_np.shape[0]))
+        mu = 0.0 if force_mu_zero else float(np.nanmean(r_np[-ky:]))
+        sigma = float(np.nanstd(r_np[-ky:], ddof=1)) if ky > 1 else 0.0
         z = 1.96
-        yhat = last_val * np.exp(np.cumsum(np.repeat(mu, horizon)))
-        lo = last_val * np.exp(np.cumsum(np.repeat(mu - z * sigma, horizon)))
-        hi = last_val * np.exp(np.cumsum(np.repeat(mu + z * sigma, horizon)))
+        h = np.arange(1, horizon + 1, dtype=float)
+
+        cum_mu = mu * h
+        cum_sd = sigma * np.sqrt(h)
+
+        yhat = last_val * np.exp(cum_mu)
+        lo   = last_val * np.exp(cum_mu - z * cum_sd)
+        hi   = last_val * np.exp(cum_mu + z * cum_sd)
+
         return pd.DataFrame({
             "symbol": symbol, "date": fc_dates, "fc_h": list(range(1, horizon + 1)),
             "method": ["naive_drift_log"] * horizon, "yhat": yhat, "yhat_lo": lo, "yhat_hi": hi,
@@ -386,15 +398,21 @@ def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.Data
             "model_desc": ["Fallback naive-drift (sin ARIMA)"] * horizon
         })
 
+    # Pronóstico ARIMA en retornos: media y se por paso
     fc = res.get_forecast(steps=horizon)
-    mean_ret = fc.predicted_mean
-    conf     = fc.conf_int(alpha=0.05)
+    mean_step = np.asarray(fc.predicted_mean, dtype=float)
+    se_step   = np.asarray(fc.se_mean, dtype=float)
 
-    cum_ret = np.cumsum(np.asarray(mean_ret))
-    yhat = last_val * np.exp(cum_ret)
-    lo = last_val * np.exp(np.cumsum(conf.iloc[:, 0].values))
-    hi = last_val * np.exp(np.cumsum(conf.iloc[:, 1].values))
-    desc = f"ARIMA en retornos log (p,d,q)={order}, selección por AICc"
+    # Acumulado coherente: S_h = sum_{tau=1}^h r_{t+tau}
+    cum_ret_mean = np.cumsum(mean_step)
+    cum_ret_sd   = np.sqrt(np.cumsum(se_step**2))  # aprox, ignora covarianzas
+
+    z = 1.96
+    yhat = last_val * np.exp(cum_ret_mean)
+    lo   = last_val * np.exp(cum_ret_mean - z * cum_ret_sd)
+    hi   = last_val * np.exp(cum_ret_mean + z * cum_ret_sd)
+
+    desc = f"ARIMA en retornos log (p,0,q)={order}, selección por AICc, winsor=1%"
     return pd.DataFrame({
         "symbol": symbol, "date": fc_dates, "fc_h": list(range(1, horizon + 1)),
         "method": ["arima_logret_aicc"] * horizon, "yhat": yhat, "yhat_lo": lo, "yhat_hi": hi,
@@ -406,7 +424,6 @@ def forecast_one_symbol(pdf: pd.DataFrame, symbol: str, horizon: int) -> pd.Data
 # Flujo principal
 # =========================
 def main() -> None:
-    # 1) Descarga y normalización
     frames = []
     for s in SYMBOLS:
         df = fetch_symbol(s)
@@ -419,11 +436,9 @@ def main() -> None:
     hist = dedupe_sort(hist).with_columns(pl.lit(dt.datetime.utcnow()).alias("ingestion_ts"))
     pdf_hist = hist.to_pandas()
 
-    # 2) Autenticación GSheet desde secrets (sin archivos intermedios)
     credentials = _get_credentials_from_secrets()
     gc = gspread.authorize(credentials)
 
-    # 3) Upsert de histórico en 'indices'
     ws_hist = _open_or_create_worksheet(
         gc, SHEET_ID, WS_DATA,
         ["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]
@@ -442,7 +457,6 @@ def main() -> None:
     merged_hist = merged_hist[["symbol","date","open","high","low","close","adj_close","volume","source","ingestion_ts"]]
     _write_full(ws_hist, merged_hist)
 
-    # 4) Pronósticos y upsert en 'proyecciones_30d'
     fc_all = []
     for s in SYMBOLS:
         fc = forecast_one_symbol(merged_hist, s, HORIZON)
@@ -450,6 +464,7 @@ def main() -> None:
             fc_all.append(fc)
     if not fc_all:
         return
+
     pdf_fc = pd.concat(fc_all, axis=0, ignore_index=True)
     pdf_fc["ingestion_ts"] = dt.datetime.utcnow()
     pdf_fc = _coerce_fc_types(pdf_fc)

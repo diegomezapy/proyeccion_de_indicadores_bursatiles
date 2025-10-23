@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tablero Estadístico Avanzado</title>
+    <title>Tablero Estadístico - Índices Bursátiles</title>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
         :root {
@@ -372,35 +372,6 @@
             border-radius: 4px;
         }
 
-        .comparison-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .comparison-symbols {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .symbol-tag {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 5px 12px;
-            font-size: 0.8rem;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .symbol-tag .remove {
-            cursor: pointer;
-            color: var(--danger);
-        }
-
         @media (max-width: 1024px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -442,7 +413,7 @@
         <header>
             <div class="logo">
                 <div class="logo-icon">📊</div>
-                <h1>Tablero Estadístico Avanzado</h1>
+                <h1>Tablero de Índices Bursátiles</h1>
             </div>
             <div class="controls">
                 <button class="btn" id="refreshBtn">
@@ -458,34 +429,14 @@
             <div class="sidebar">
                 <div class="card">
                     <h3 class="card-title"><i>⚙️</i> Configuración de Datos</h3>
-
-
-
                     <div class="form-group">
-                          <label for="sheetUrl">URL Hoja Histórica (indices)</label>
-                          <input
-                            type="url"
-                            id="sheetUrl"
-                            value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices"
-                            inputmode="url"
-                            spellcheck="false"
-                            autocomplete="off"
-                          >
-                        </div>
-                        
-                        <div class="form-group">
-                          <label for="fcUrl">URL Hoja Proyección (proyecciones_30d)</label>
-                          <input
-                            type="url"
-                            id="fcUrl"
-                            value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d"
-                            inputmode="url"
-                            spellcheck="false"
-                            autocomplete="off"
-                          >
-                        </div>
-                        
-                                            
+                        <label for="sheetUrl">URL Hoja Histórica</label>
+                        <input type="text" id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices">
+                    </div>
+                    <div class="form-group">
+                        <label for="fcUrl">URL Hoja Proyección</label>
+                        <input type="text" id="fcUrl" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d">
+                    </div>
                     <button class="btn" id="loadDataBtn">
                         <i>📥</i> Cargar Datos
                     </button>
@@ -494,21 +445,10 @@
                 <div class="card">
                     <h3 class="card-title"><i>🔍</i> Filtros de Análisis</h3>
                     <div class="form-group">
-                        <label for="symbol">Símbolo Principal</label>
+                        <label for="symbol">Índice</label>
                         <select id="symbol">
                             <option value="">Cargando...</option>
                         </select>
-                    </div>
-                    
-                    <div class="comparison-controls">
-                        <select id="compareSymbol">
-                            <option value="">Agregar comparación...</option>
-                        </select>
-                        <button class="btn-secondary" id="addComparisonBtn">+</button>
-                    </div>
-                    
-                    <div class="comparison-symbols" id="comparisonSymbols">
-                        <!-- Los símbolos de comparación aparecerán aquí -->
                     </div>
                     
                     <div class="form-group">
@@ -568,25 +508,12 @@
                         <label for="logScale">Escala Logarítmica</label>
                     </div>
                 </div>
-                
-                <div class="card">
-                    <h3 class="card-title"><i>💾</i> Exportar Datos</h3>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn-secondary" id="exportChartBtn">
-                            <i>📈</i> Exportar Gráfico
-                        </button>
-                        <button class="btn-secondary" id="exportDataBtn">
-                            <i>📋</i> Exportar Datos
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <div class="main-content">
                 <div class="tabs">
                     <div class="tab active" data-tab="series">Series Temporales</div>
                     <div class="tab" data-tab="stats">Estadísticas</div>
-                    <div class="tab" data-tab="correlation">Correlación</div>
                     <div class="tab" data-tab="methodology">Metodología</div>
                 </div>
 
@@ -622,7 +549,7 @@
                     </div>
 
                     <div class="chart-container">
-                        <div class="chart-title">Evolución de Precios</div>
+                        <div class="chart-title">Evolución del Índice</div>
                         <div id="chart"></div>
                     </div>
 
@@ -697,22 +624,10 @@
                     </div>
                 </div>
 
-                <div class="tab-content" id="correlationTab">
-                    <div class="chart-container">
-                        <div class="chart-title">Matriz de Correlación</div>
-                        <div id="correlationChart"></div>
-                    </div>
-                    
-                    <div class="chart-container">
-                        <div class="chart-title">Comparación de Símbolos</div>
-                        <div id="comparisonChart"></div>
-                    </div>
-                </div>
-
                 <div class="tab-content" id="methodologyTab">
                     <div class="methodology-content">
                         <h3>Metodología del Análisis</h3>
-                        <p>Este tablero estadístico utiliza técnicas avanzadas de análisis de series temporales financieras para proporcionar insights sobre el comportamiento de los activos.</p>
+                        <p>Este tablero estadístico utiliza técnicas avanzadas de análisis de series temporales financieras para proporcionar insights sobre el comportamiento de los índices bursátiles.</p>
                         
                         <h3>Procesamiento de Datos</h3>
                         <p>Los datos históricos y de proyección se obtienen de hojas de cálculo de Google mediante la API de Google Visualization. El proceso incluye:</p>
@@ -779,129 +694,44 @@
             });
         }
 
-        // Parse fechas Google Visualization: Date(YYYY,MM,DD[,hh,mm,ss]) o ISO o epoch
-                
-        // --- Parser robusto para fechas de Google Visualization / ISO / epoch ---
-        function parseGvizDate(x){
-          // Null o indefinido
-          if (x == null) return null;
-        
-          // Ya es Date
-          if (x instanceof Date) {
-            const d = new Date(x.getTime());
-            d.setHours(0, 0, 0, 0);
-            return d;
-          }
-        
-          // Celdas GViz: objetos con .v / .f
-          if (typeof x === "object") {
-            // Prioriza .v si existe
-            if ("v" in x && x.v != null) return parseGvizDate(x.v);
-            if ("f" in x && x.f != null) return parseGvizDate(x.f);
-            // Si trae {year, month, day}
-            if ("year" in x && "month" in x && "day" in x) {
-              const d = new Date(x.year, x.month, x.day);
-              if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
+        // Parse fechas Google Visualization
+        function parseGvizDate(val){
+            if(val==null) return null;
+            if(val instanceof Date) return val;
+            if(typeof val==="number") return new Date(val);
+            if(typeof val==="string"){
+                const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)/);
+                if(m){
+                    const y=+m[1], mo=+m[2], d=+(m[3]??1), hh=+(m[4]??0), mi=+(m[5]??0), ss=+(m[6]??0);
+                    return new Date(y, mo, d, hh, mi, ss);
+                }
+                const dISO = new Date(val);
+                if(!isNaN(dISO)) return dISO;
             }
-            // Como fallback, conviértelo a string y reintenta
-            x = String(x);
-          }
-        
-          // Número: epoch (ms) o días desde epoch si es chico
-          if (typeof x === "number") {
-            let d = new Date(x);
-            if (isNaN(d)) {
-              // Si parece ser "días desde 1970-01-01"
-              d = new Date(1970, 0, 1);
-              d.setDate(d.getDate() + x);
-            }
-            if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
             return null;
-          }
-        
-          // String: formatos GViz "Date(YYYY,MM,DD[,hh,mm,ss])" o ISO
-          if (typeof x === "string") {
-            const s = x.trim();
-        
-            // Date(YYYY,MM,DD[,hh,mm,ss])
-            const m = s.match(/^Date\(\s*(\d{4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})(?:\s*,\s*(\d{1,2}))?(?:\s*,\s*(\d{1,2}))?(?:\s*,\s*(\d{1,2}))?\s*\)$/);
-            if (m) {
-              const y = +m[1];
-              const mo = +m[2];      // ¡OJO!: en GViz month es 0-based
-              const da = +m[3];
-              const hh = +(m[4] || 0);
-              const mi = +(m[5] || 0);
-              const ss = +(m[6] || 0);
-              const d = new Date(y, mo, da, hh, mi, ss);
-              if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
-            }
-        
-            // ISO u otros reconocidos por Date(...)
-            const d2 = new Date(s);
-            if (!isNaN(d2)) { d2.setHours(0,0,0,0); return d2; }
-          }
-        
-          // Si no pudo parsear, devuelve null
-          return null;
         }
-        
-        
-
-            // --- Normalizador de filas de proyección (sheet: proyecciones_30d) ---
-            function coerceForecastRows(rows){
-              // Normaliza encabezados alternativos: adjclose -> adj_close, etc.
-              rows.forEach(r => {
-                if (r["adjclose"] != null && r["adj_close"] == null) r["adj_close"] = r["adjclose"];
-              });
-            
-              // Tipado y limpieza
-              rows.forEach(r => {
-                r.symbol        = r.symbol != null ? String(r.symbol) : null;
-                r.date          = parseGvizDate(r.date);
-                r.fc_h          = r.fc_h == null || r.fc_h === "" ? null : Number(r.fc_h);
-                r.yhat          = r.yhat == null || r.yhat === "" ? null : Number(r.yhat);
-                r.yhat_lo       = r.yhat_lo == null || r.yhat_lo === "" ? null : Number(r.yhat_lo);
-                r.yhat_hi       = r.yhat_hi == null || r.yhat_hi === "" ? null : Number(r.yhat_hi);
-                r.last_obs_date = parseGvizDate(r.last_obs_date);
-                r.last_obs_value= r.last_obs_value == null || r.last_obs_value === "" ? null : Number(r.last_obs_value);
-                // Si la hoja trae "method" o "model_desc" como objetos GViz, toma .v o .f si corresponde
-                if (r.method && typeof r.method === "object" && "v" in r.method) r.method = r.method.v;
-                if (r.model_desc && typeof r.model_desc === "object" && "v" in r.model_desc) r.model_desc = r.model_desc.v;
-              });
-            
-              // Filtra filas inválidas, requiere fecha válida y yhat numérico
-              rows = rows.filter(r =>
-                r.symbol &&
-                r.date instanceof Date &&
-                !isNaN(r.date.getTime()) &&
-                r.yhat != null && Number.isFinite(r.yhat)
-              );
-            
-              // Orden estable: symbol, date, fc_h
-              rows.sort((a,b) =>
-                a.symbol.localeCompare(b.symbol) ||
-                (a.date - b.date) ||
-                ((a.fc_h ?? 0) - (b.fc_h ?? 0))
-              );
-            
-              return rows;
-            }
-
-
 
         async function fetchGvizJSON(url) {
-            const res = await fetch(url, { cache: "no-store" });
-            const text = await res.text();
-            const start = text.indexOf("{");
-            const end = text.lastIndexOf("}");
-            if(start === -1 || end === -1){
-                throw new Error("La respuesta no parece ser JSON de gviz. ¿Hoja sin permisos públicos?");
-            }
-            try{
-                return JSON.parse(text.slice(start, end + 1));
-            }catch(e){
-                console.error("GViz parse error:", e, text.slice(0, 200));
-                throw new Error("No se pudo parsear el JSON de gviz.");
+            try {
+                const res = await fetch(url, { cache: "no-store" });
+                if (!res.ok) {
+                    throw new Error(`Error HTTP: ${res.status}`);
+                }
+                const text = await res.text();
+                const start = text.indexOf("{");
+                const end = text.lastIndexOf("}");
+                if(start === -1 || end === -1){
+                    throw new Error("La respuesta no parece ser JSON de gviz. ¿Hoja sin permisos públicos?");
+                }
+                try{
+                    return JSON.parse(text.slice(start, end + 1));
+                }catch(e){
+                    console.error("GViz parse error:", e, text.slice(0, 200));
+                    throw new Error("No se pudo parsear el JSON de gviz.");
+                }
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                throw error;
             }
         }
 
@@ -922,64 +752,39 @@
         function coerceHistoricalRows(rows) {
             const priceCols = ["open","high","low","close","adj_close"];
             rows.forEach(r => {
-                r.symbol = r.symbol != null ? String(r.symbol) : null;
-                if(r["adjclose"]!=null && r["adj_close"]==null) r["adj_close"]=r["adjclose"];
-                r.date = parseGvizDate(r.date);
-                priceCols.forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
+                // Usar BOL como símbolo (que es como se llama la columna en tus datos)
+                r.symbol = r.BOL != null ? String(r.BOL) : null;
+                // Usar "marca de diagnóstico" como fecha
+                r.date = parseGvizDate(r["marca de diagnóstico"]);
+                
+                // Asegurarnos de que las columnas de precios se conviertan correctamente
+                priceCols.forEach(k => { 
+                    r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); 
+                });
                 r.volume = r.volume==null || r.volume==="" ? null : Number(r.volume);
             });
+            // Filtrar filas válidas
             rows = rows.filter(r => r.date instanceof Date && (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null));
             rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
             return rows;
         }
 
-
-        function coerceHistoricalRows(rows) {
-          const alias = {
-            symbol: ['symbol','símbolo','simbolo','ticker'],
-            date:   ['date','fecha'],
-            open:   ['open','apertura'],
-            high:   ['high','máximo','maximo'],
-            low:    ['low','mínimo','minimo'],
-            close:  ['close','cierre'],
-            adj_close: ['adj_close','adjclose','cierre_ajustado','cierre ajustado'],
-            volume: ['volume','volumen']
-          };
-          const mapKey = (obj, target) => {
-            for (const k of alias[target]) {
-              if (k in obj && obj[k] != null) return obj[k];
-              // intenta también por lower-case y quitando espacios
-              const kk = Object.keys(obj).find(
-                c => c && c.toString().trim().toLowerCase() === k
-              );
-              if (kk && obj[kk] != null) return obj[kk];
-            }
-            return null;
-          };
-        
-          rows = rows.map(r0 => {
-            const r = {};
-            r.symbol = mapKey(r0,'symbol') != null ? String(mapKey(r0,'symbol')) : null;
-            const d  = mapKey(r0,'date'); r.date = parseGvizDate(d);
-            r.open   = mapKey(r0,'open');    r.open   = r.open==null||r.open===''?null:Number(r.open);
-            r.high   = mapKey(r0,'high');    r.high   = r.high==null||r.high===''?null:Number(r.high);
-            r.low    = mapKey(r0,'low');     r.low    = r.low==null||r.low===''?null:Number(r.low);
-            r.close  = mapKey(r0,'close');   r.close  = r.close==null||r.close===''?null:Number(r.close);
-            r.adj_close = mapKey(r0,'adj_close'); r.adj_close = r.adj_close==null||r.adj_close===''?null:Number(r.adj_close);
-            r.volume = mapKey(r0,'volume');  r.volume = r.volume==null||r.volume===''?null:Number(r.volume);
-            return r;
-          });
-        
-          rows = rows.filter(r =>
-            r.date instanceof Date &&
-            (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null)
-          );
-          rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
-          return rows;
+        function coerceForecastRows(rows) {
+            rows.forEach(r => {
+                r.symbol = r.symbol != null ? String(r.symbol) : null;
+                r.date = parseGvizDate(r.date);
+                r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
+                ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { 
+                    r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); 
+                });
+                r.last_obs_date = parseGvizDate(r.last_obs_date);
+            });
+            rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
+            rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0) - (b.fc_h??0));
+            return rows;
         }
 
-
-        // === Funciones de análisis mejoradas ===
+        // === Funciones de análisis ===
         function computeReturns(prices) {
             const returns = [];
             for (let i = 1; i < prices.length; i++) {
@@ -1168,14 +973,14 @@
             return {x, y};
         }
 
-        // === Funciones de renderizado mejoradas ===
+        // === Funciones de renderizado ===
         function renderMainChart() {
             const sym = elSymbol.value || (SYMBOLS[0] || "");
             const metric = elMetric.value;
             const retMode = elRet.value;
             const smoothK = elSmooth.value;
             const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
-            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000); // max
+            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
             const logScale = document.getElementById('logScale').checked;
 
             const base = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
@@ -1195,25 +1000,6 @@
                     hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
                 });
             }
-
-            // Comparación con otros símbolos
-            comparisonSymbols.forEach(compareSym => {
-                if (compareSym !== sym) {
-                    const compareData = DATA.filter(r => r.symbol === compareSym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
-                    const compareSeries = computeSeries(compareData, metric, retMode, smoothK);
-                    
-                    if (compareSeries.x.length) {
-                        traces.push({
-                            x: compareSeries.x, 
-                            y: compareSeries.y, 
-                            mode: "lines", 
-                            line: {width: 1.5, dash: "dot"}, 
-                            name: `${compareSym} - Histórico`,
-                            hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
-                        });
-                    }
-                }
-            });
 
             const showFc = document.getElementById('showFc').checked;
             const showBands = document.getElementById('showBands').checked;
@@ -1371,168 +1157,14 @@
             Plotly.newPlot("distributionChart", [trace], layout, {displayModeBar: true, responsive: true});
         }
 
-        function renderCorrelationChart() {
-            const symbolsToCompare = [elSymbol.value, ...comparisonSymbols].filter(s => s && SYMBOLS.includes(s));
-            if (symbolsToCompare.length < 2) return;
-            
-            const metric = elMetric.value;
-            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
-            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
-            
-            // Obtener datos para cada símbolo
-            const symbolData = {};
-            symbolsToCompare.forEach(sym => {
-                const data = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
-                symbolData[sym] = data.map(r => r[metric]);
-            });
-            
-            // Calcular matriz de correlación
-            const correlations = [];
-            const labels = [];
-            
-            for (let i = 0; i < symbolsToCompare.length; i++) {
-                labels.push(symbolsToCompare[i]);
-                const row = [];
-                for (let j = 0; j < symbolsToCompare.length; j++) {
-                    if (i === j) {
-                        row.push(1);
-                    } else {
-                        const dataI = symbolData[symbolsToCompare[i]];
-                        const dataJ = symbolData[symbolsToCompare[j]];
-                        
-                        // Encontrar fechas comunes
-                        const commonDataI = [];
-                        const commonDataJ = [];
-                        
-                        DATA.filter(r => r.symbol === symbolsToCompare[i] && r.date >= dFrom && r.date <= dTo && r[metric] != null)
-                            .forEach(r => {
-                                const matching = DATA.find(d => 
-                                    d.symbol === symbolsToCompare[j] && 
-                                    d.date.getTime() === r.date.getTime() && 
-                                    d[metric] != null
-                                );
-                                if (matching) {
-                                    commonDataI.push(r[metric]);
-                                    commonDataJ.push(matching[metric]);
-                                }
-                            });
-                        
-                        if (commonDataI.length > 1) {
-                            const meanI = commonDataI.reduce((a, b) => a + b, 0) / commonDataI.length;
-                            const meanJ = commonDataJ.reduce((a, b) => a + b, 0) / commonDataJ.length;
-                            
-                            const numerator = commonDataI.reduce((sum, _, idx) => 
-                                sum + (commonDataI[idx] - meanI) * (commonDataJ[idx] - meanJ), 0);
-                            const denominator = Math.sqrt(
-                                commonDataI.reduce((sum, val) => sum + Math.pow(val - meanI, 2), 0) *
-                                commonDataJ.reduce((sum, val) => sum + Math.pow(val - meanJ, 2), 0)
-                            );
-                            
-                            row.push(denominator !== 0 ? numerator / denominator : 0);
-                        } else {
-                            row.push(0);
-                        }
-                    }
-                }
-                correlations.push(row);
-            }
-            
-            const trace = {
-                z: correlations,
-                x: labels,
-                y: labels,
-                type: 'heatmap',
-                colorscale: 'RdBu',
-                zmin: -1,
-                zmax: 1,
-                hoverongaps: false,
-                hovertemplate: 'Corr(%{x}, %{y}) = %{z:.3f}<extra></extra>'
-            };
-            
-            const layout = {
-                margin: {l: 60, r: 20, t: 40, b: 40},
-                paper_bgcolor: "rgba(0,0,0,0)", 
-                plot_bgcolor: "rgba(0,0,0,0)",
-                xaxis: { 
-                    tickangle: -45,
-                    title: "Símbolos"
-                },
-                yaxis: { 
-                    title: "Símbolos"
-                }
-            };
-            
-            Plotly.newPlot("correlationChart", [trace], layout, {displayModeBar: true, responsive: true});
-        }
-
-        function renderComparisonChart() {
-            const symbolsToCompare = [elSymbol.value, ...comparisonSymbols].filter(s => s && SYMBOLS.includes(s));
-            if (symbolsToCompare.length < 2) return;
-            
-            const metric = elMetric.value;
-            const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
-            const dTo = elTo.value ? new Date(elTo.value) : new Date(8640000000000000);
-            
-            const traces = [];
-            const colors = ['#3a86ff', '#ff6b6b', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
-            
-            symbolsToCompare.forEach((sym, idx) => {
-                const data = DATA.filter(r => r.symbol === sym && r.date >= dFrom && r.date <= dTo && r[metric] != null);
-                if (data.length) {
-                    // Normalizar para comparación (base 100)
-                    const firstValue = data[0][metric];
-                    const normalized = data.map(r => (r[metric] / firstValue) * 100);
-                    
-                    traces.push({
-                        x: data.map(r => r.date),
-                        y: normalized,
-                        mode: 'lines',
-                        name: sym,
-                        line: { width: 2, color: colors[idx % colors.length] },
-                        hovertemplate: "%{x|%Y-%m-%d}<br>" + sym + ": %{y:.2f} (base 100)<extra></extra>"
-                    });
-                }
-            });
-            
-            const layout = {
-                margin: {l: 60, r: 20, t: 40, b: 40},
-                paper_bgcolor: "rgba(0,0,0,0)", 
-                plot_bgcolor: "rgba(0,0,0,0)",
-                xaxis: { 
-                    showgrid: true, 
-                    gridcolor: 'rgba(128,128,128,0.2)',
-                    zeroline: false,
-                    title: "Fecha"
-                },
-                yaxis: { 
-                    showgrid: true, 
-                    gridcolor: 'rgba(128,128,128,0.2)',
-                    zeroline: false,
-                    title: "Performance (Base 100)"
-                },
-                legend: {
-                    orientation: "h",
-                    y: -0.2,
-                    x: 0.5,
-                    xanchor: "center"
-                },
-                hovermode: "closest"
-            };
-            
-            Plotly.newPlot("comparisonChart", traces, layout, {displayModeBar: true, responsive: true});
-        }
-
         function render() {
             renderMainChart();
             renderReturnsChart();
             renderDistributionChart();
-            renderCorrelationChart();
-            renderComparisonChart();
         }
 
         // === Estado y elementos ===
         let DATA = [], FC = [], SYMBOLS = [];
-        let comparisonSymbols = [];
         
         const elSymbol = document.getElementById('symbol');
         const elMetric = document.getElementById('metric');
@@ -1540,8 +1172,6 @@
         const elSmooth = document.getElementById('smooth');
         const elFrom = document.getElementById('dateFrom');
         const elTo = document.getElementById('dateTo');
-        const elCompareSymbol = document.getElementById('compareSymbol');
-        const elComparisonSymbols = document.getElementById('comparisonSymbols');
         const elLoader = document.getElementById('loader');
         const elErrorMessage = document.getElementById('errorMessage');
 
@@ -1559,33 +1189,6 @@
             elErrorMessage.textContent = message;
             elErrorMessage.style.display = 'block';
             hideLoader();
-        }
-
-        function updateComparisonSymbols() {
-            elCompareSymbol.innerHTML = '<option value="">Agregar comparación...</option>';
-            SYMBOLS.forEach(sym => {
-                if (sym !== elSymbol.value && !comparisonSymbols.includes(sym)) {
-                    elCompareSymbol.innerHTML += `<option value="${sym}">${sym}</option>`;
-                }
-            });
-            
-            elComparisonSymbols.innerHTML = '';
-            comparisonSymbols.forEach(sym => {
-                const tag = document.createElement('div');
-                tag.className = 'symbol-tag';
-                tag.innerHTML = `${sym} <span class="remove" data-symbol="${sym}">×</span>`;
-                elComparisonSymbols.appendChild(tag);
-            });
-            
-            // Agregar event listeners para eliminar símbolos
-            document.querySelectorAll('.symbol-tag .remove').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const symbolToRemove = this.getAttribute('data-symbol');
-                    comparisonSymbols = comparisonSymbols.filter(s => s !== symbolToRemove);
-                    updateComparisonSymbols();
-                    render();
-                });
-            });
         }
 
         // === Carga de datos ===
@@ -1608,7 +1211,6 @@
                 ])).sort();
 
                 elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
-                updateComparisonSymbols();
 
                 // Fijar rango de fechas usando datos combinados (histórico ∪ proyección)
                 const allDates = [
@@ -1650,16 +1252,6 @@
             // Botón de actualización
             document.getElementById('refreshBtn').addEventListener('click', load);
             
-            // Botón de agregar comparación
-            document.getElementById('addComparisonBtn').addEventListener('click', function() {
-                const sym = elCompareSymbol.value;
-                if (sym && !comparisonSymbols.includes(sym)) {
-                    comparisonSymbols.push(sym);
-                    updateComparisonSymbols();
-                    render();
-                }
-            });
-            
             // Tabs
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.addEventListener('click', function() {
@@ -1671,12 +1263,6 @@
                     this.classList.add('active');
                     const tabId = this.getAttribute('data-tab');
                     document.getElementById(tabId + 'Tab').classList.add('active');
-                    
-                    // Si es la pestaña de correlación, renderizar gráficos específicos
-                    if (tabId === 'correlation') {
-                        renderCorrelationChart();
-                        renderComparisonChart();
-                    }
                 });
             });
             
@@ -1684,16 +1270,7 @@
             document.getElementById('themeToggle').addEventListener('click', function() {
                 document.body.classList.toggle('light-mode');
                 this.innerHTML = document.body.classList.contains('light-mode') ? '<i>☀️</i>' : '<i>🌙</i>';
-                render(); // Re-renderizar para ajustar colores
-            });
-            
-            // Botones de exportación (placeholder)
-            document.getElementById('exportChartBtn').addEventListener('click', function() {
-                alert('Funcionalidad de exportación de gráfico en desarrollo');
-            });
-            
-            document.getElementById('exportDataBtn').addEventListener('click', function() {
-                alert('Funcionalidad de exportación de datos en desarrollo');
+                render();
             });
             
             // Cargar datos iniciales

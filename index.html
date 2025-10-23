@@ -780,21 +780,48 @@
         }
 
         // Parse fechas Google Visualization: Date(YYYY,MM,DD[,hh,mm,ss]) o ISO o epoch
-        function parseGvizDate(val){
-            if(val==null) return null;
-            if(val instanceof Date) return val;
-            if(typeof val==="number") return new Date(val);
-            if(typeof val==="string"){
-                const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)/);
-                if(m){
-                    const y=+m[1], mo=+m[2], d=+(m[3]??1), hh=+(m[4]??0), mi=+(m[5]??0), ss=+(m[6]??0);
-                    return new Date(y, mo, d, hh, mi, ss); // mo ya es 0-index
-                }
-                const dISO = new Date(val);
-                if(!isNaN(dISO)) return dISO;
+
+            // --- Normalizador de filas de proyección (sheet: proyecciones_30d) ---
+            function coerceForecastRows(rows){
+              // Normaliza encabezados alternativos: adjclose -> adj_close, etc.
+              rows.forEach(r => {
+                if (r["adjclose"] != null && r["adj_close"] == null) r["adj_close"] = r["adjclose"];
+              });
+            
+              // Tipado y limpieza
+              rows.forEach(r => {
+                r.symbol        = r.symbol != null ? String(r.symbol) : null;
+                r.date          = parseGvizDate(r.date);
+                r.fc_h          = r.fc_h == null || r.fc_h === "" ? null : Number(r.fc_h);
+                r.yhat          = r.yhat == null || r.yhat === "" ? null : Number(r.yhat);
+                r.yhat_lo       = r.yhat_lo == null || r.yhat_lo === "" ? null : Number(r.yhat_lo);
+                r.yhat_hi       = r.yhat_hi == null || r.yhat_hi === "" ? null : Number(r.yhat_hi);
+                r.last_obs_date = parseGvizDate(r.last_obs_date);
+                r.last_obs_value= r.last_obs_value == null || r.last_obs_value === "" ? null : Number(r.last_obs_value);
+                // Si la hoja trae "method" o "model_desc" como objetos GViz, toma .v o .f si corresponde
+                if (r.method && typeof r.method === "object" && "v" in r.method) r.method = r.method.v;
+                if (r.model_desc && typeof r.model_desc === "object" && "v" in r.model_desc) r.model_desc = r.model_desc.v;
+              });
+            
+              // Filtra filas inválidas, requiere fecha válida y yhat numérico
+              rows = rows.filter(r =>
+                r.symbol &&
+                r.date instanceof Date &&
+                !isNaN(r.date.getTime()) &&
+                r.yhat != null && Number.isFinite(r.yhat)
+              );
+            
+              // Orden estable: symbol, date, fc_h
+              rows.sort((a,b) =>
+                a.symbol.localeCompare(b.symbol) ||
+                (a.date - b.date) ||
+                ((a.fc_h ?? 0) - (b.fc_h ?? 0))
+              );
+            
+              return rows;
             }
-            return null;
-        }
+
+
 
         async function fetchGvizJSON(url) {
             const res = await fetch(url, { cache: "no-store" });

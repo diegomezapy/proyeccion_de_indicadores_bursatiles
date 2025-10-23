@@ -780,6 +780,72 @@
         }
 
         // Parse fechas Google Visualization: Date(YYYY,MM,DD[,hh,mm,ss]) o ISO o epoch
+                
+        // --- Parser robusto para fechas de Google Visualization / ISO / epoch ---
+        function parseGvizDate(x){
+          // Null o indefinido
+          if (x == null) return null;
+        
+          // Ya es Date
+          if (x instanceof Date) {
+            const d = new Date(x.getTime());
+            d.setHours(0, 0, 0, 0);
+            return d;
+          }
+        
+          // Celdas GViz: objetos con .v / .f
+          if (typeof x === "object") {
+            // Prioriza .v si existe
+            if ("v" in x && x.v != null) return parseGvizDate(x.v);
+            if ("f" in x && x.f != null) return parseGvizDate(x.f);
+            // Si trae {year, month, day}
+            if ("year" in x && "month" in x && "day" in x) {
+              const d = new Date(x.year, x.month, x.day);
+              if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
+            }
+            // Como fallback, conviértelo a string y reintenta
+            x = String(x);
+          }
+        
+          // Número: epoch (ms) o días desde epoch si es chico
+          if (typeof x === "number") {
+            let d = new Date(x);
+            if (isNaN(d)) {
+              // Si parece ser "días desde 1970-01-01"
+              d = new Date(1970, 0, 1);
+              d.setDate(d.getDate() + x);
+            }
+            if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
+            return null;
+          }
+        
+          // String: formatos GViz "Date(YYYY,MM,DD[,hh,mm,ss])" o ISO
+          if (typeof x === "string") {
+            const s = x.trim();
+        
+            // Date(YYYY,MM,DD[,hh,mm,ss])
+            const m = s.match(/^Date\(\s*(\d{4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})(?:\s*,\s*(\d{1,2}))?(?:\s*,\s*(\d{1,2}))?(?:\s*,\s*(\d{1,2}))?\s*\)$/);
+            if (m) {
+              const y = +m[1];
+              const mo = +m[2];      // ¡OJO!: en GViz month es 0-based
+              const da = +m[3];
+              const hh = +(m[4] || 0);
+              const mi = +(m[5] || 0);
+              const ss = +(m[6] || 0);
+              const d = new Date(y, mo, da, hh, mi, ss);
+              if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
+            }
+        
+            // ISO u otros reconocidos por Date(...)
+            const d2 = new Date(s);
+            if (!isNaN(d2)) { d2.setHours(0,0,0,0); return d2; }
+          }
+        
+          // Si no pudo parsear, devuelve null
+          return null;
+        }
+        
+        
 
             // --- Normalizador de filas de proyección (sheet: proyecciones_30d) ---
             function coerceForecastRows(rows){

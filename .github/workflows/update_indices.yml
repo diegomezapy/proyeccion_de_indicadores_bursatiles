@@ -1,11 +1,9 @@
 <script>
-  // === Utilidades ===
   function toISO(d){
     const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
     return `${y}-${m}-${da}`;
   }
 
-  // Conversión numérica robusta: elimina separadores de miles y espacios
   function num(x){
     if (x==null || x==="") return null;
     if (typeof x === "number") return x;
@@ -31,7 +29,6 @@
   }
   function formatPct(x){ if(x==null || isNaN(x)) return "—"; return (x*100).toFixed(2)+"%"; }
 
-  // Parse fechas Google Visualization: Date(YYYY,MM,DD[,hh,mm,ss]) o ISO o epoch
   function parseGvizDate(val){
     if(val==null) return null;
     if(val instanceof Date) return val;
@@ -91,7 +88,6 @@
       r.date instanceof Date &&
       (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null)
     );
-    // Ordenación segura si symbol es nulo
     rows.sort((a,b) => {
       const sa = (a.symbol || ""), sb = (b.symbol || "");
       return sa.localeCompare(sb) || (a.date - b.date);
@@ -206,7 +202,6 @@
     Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
   }
 
-  // === Estado y elementos ===
   let DATA=[], FC=[], SYMBOLS=[];
   const elSymbol=document.getElementById('symbol');
   const elMetric=document.getElementById('metric');
@@ -226,7 +221,6 @@
   }
 
   async function load() {
-    // panel de error reutilizable, cae al body si no existe #errorMessage
     const errBox = (msg) => {
       const holder = document.getElementById('errorMessage');
       const html = `<div class="card" style="margin-top:.6rem;border-left:4px solid #b03030">
@@ -259,7 +253,6 @@
         elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
       }
 
-      // rango de fechas usando datos combinados (histórico ∪ proyección)
       const allDates = [...histRows.map(r=>r.date), ...fcRows.map(r=>r.date)].filter(d=> d instanceof Date);
       if(allDates.length){
         const maxDate = new Date(Math.max.apply(null, allDates));
@@ -271,7 +264,6 @@
         if (elTo)   elTo.value   = toISO(new Date());
       }
 
-      // métrica por defecto coherente con entrenamiento
       if (elMetric) elMetric.value = "adj_close";
 
       render();
@@ -285,7 +277,6 @@
     ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo","showFc","showBands","logScale"]
       .map(id=>document.getElementById(id))
       .forEach(el=> el && el.addEventListener("change", render));
-    // Asegurar que Plotly esté disponible
     if (typeof Plotly === "undefined") {
       console.warn("Plotly no está cargado. Incluye <script src='https://cdn.plot.ly/plotly-2.24.1.min.js'></script> en <head>.");
     }

@@ -1,9 +1,22 @@
 <script>
   // === Utilidades ===
   function toISO(d){
-    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0");
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
     return `${y}-${m}-${da}`;
   }
+
+  // Conversión numérica robusta: elimina separadores de miles y espacios
+  function num(x){
+    if (x==null || x==="") return null;
+    if (typeof x === "number") return x;
+    if (typeof x === "string") {
+      const s = x.replace(/\s+/g,"").replace(/,/g,""); // "1,234.56" -> "1234.56"
+      const v = Number(s);
+      return Number.isFinite(v) ? v : null;
+    }
+    return null;
+  }
+
   function rollingMean(arr,k){
     if(k<=1) return arr.slice();
     const out=new Array(arr.length).fill(null);
@@ -16,7 +29,7 @@
     }
     return out;
   }
-  function formatPct(x){ if(x==null||isNaN(x)) return "—"; return (x*100).toFixed(2)+"%"; }
+  function formatPct(x){ if(x==null || isNaN(x)) return "—"; return (x*100).toFixed(2)+"%"; }
 
   // Parse fechas Google Visualization: Date(YYYY,MM,DD[,hh,mm,ss]) o ISO o epoch
   function parseGvizDate(val){
@@ -27,7 +40,7 @@
       const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)/);
       if(m){
         const y=+m[1], mo=+m[2], d=+(m[3]??1), hh=+(m[4]??0), mi=+(m[5]??0), ss=+(m[6]??0);
-        return new Date(y, mo, d, hh, mi, ss); // mo ya es 0-index
+        return new Date(y, mo, d, hh, mi, ss); // month en GViz ya es 0-index
       }
       const dISO = new Date(val);
       if(!isNaN(dISO)) return dISO;
@@ -39,7 +52,7 @@
     const res = await fetch(url, { cache: "no-store" });
     const text = await res.text();
     const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
+    const end   = text.lastIndexOf("}");
     if(start === -1 || end === -1){
       throw new Error("La respuesta no parece ser JSON de gviz. ¿Hoja sin permisos públicos?");
     }
@@ -68,27 +81,37 @@
   function coerceHistoricalRows(rows) {
     const priceCols = ["open","high","low","close","adj_close"];
     rows.forEach(r => {
-      r.symbol = r.symbol != null ? String(r.symbol) : null;
+      r.symbol = r.symbol != null ? String(r.symbol).trim() : null;
       if(r["adjclose"]!=null && r["adj_close"]==null) r["adj_close"]=r["adjclose"];
       r.date = parseGvizDate(r.date);
-      priceCols.forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
-      r.volume = r.volume==null || r.volume==="" ? null : Number(r.volume);
+      priceCols.forEach(k => { r[k] = num(r[k]); });
+      r.volume = num(r.volume);
     });
-    rows = rows.filter(r => r.date instanceof Date && (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null));
-    rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date);
+    rows = rows.filter(r =>
+      r.date instanceof Date &&
+      (r.close!=null || r.adj_close!=null || r.open!=null || r.high!=null || r.low!=null)
+    );
+    // Ordenación segura si symbol es nulo
+    rows.sort((a,b) => {
+      const sa = (a.symbol || ""), sb = (b.symbol || "");
+      return sa.localeCompare(sb) || (a.date - b.date);
+    });
     return rows;
   }
 
   function coerceForecastRows(rows) {
     rows.forEach(r => {
-      r.symbol = r.symbol != null ? String(r.symbol) : null;
+      r.symbol = r.symbol != null ? String(r.symbol).trim() : null;
       r.date = parseGvizDate(r.date);
-      r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
-      ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
+      r.fc_h = num(r.fc_h);
+      ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = num(r[k]); });
       r.last_obs_date = parseGvizDate(r.last_obs_date);
     });
     rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
-    rows.sort((a,b) => a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0) - (b.fc_h??0));
+    rows.sort((a,b) => {
+      const sa = (a.symbol || ""), sb = (b.symbol || "");
+      return sa.localeCompare(sb) || (a.date - b.date) || ((a.fc_h??0) - (b.fc_h??0));
+    });
     return rows;
   }
 
@@ -105,7 +128,7 @@
     const firstYear = new Date(d.getFullYear(), 0, 1);
     const yRecords = records.filter(r=> r.date>=firstYear && r[metric]!=null);
     let ytd=null; if(yRecords.length>=2){ const base=yRecords[0][metric]; const end=yRecords[yRecords.length-1][metric]; ytd = base? (end/base - 1): null; }
-    elLast.textContent = last==null? "—" : last.toLocaleString(undefined,{maximumFractionDigits:2});
+    elLast.textContent = last==null? "—" : Number(last).toLocaleString(undefined,{maximumFractionDigits:2});
     elMtd.textContent  = formatPct(mtd);
     elYtd.textContent  = formatPct(ytd);
   }
@@ -114,8 +137,9 @@
     const x = records.map(r=>r.date);
     const y0 = records.map(r=>r[metric]);
     let y = y0.slice();
-    if(retMode==="ret_d"){ y = y.map((v,i)=> i===0||v==null||y0[i-1]==null? null : (v/y0[i-1]-1)); }
-    else if(retMode==="ret_cum"){
+    if(retMode==="ret_d"){
+      y = y.map((v,i)=> i===0||v==null||y0[i-1]==null? null : (v/y0[i-1]-1));
+    } else if(retMode==="ret_cum"){
       let acc=1;
       y = y.map((v,i)=>{ if(i===0||v==null||y0[i-1]==null) return 0; const r=v/y0[i-1]-1; acc*= (1+r); return acc-1; });
     }
@@ -131,6 +155,8 @@
     const smoothK = elSmooth.value;
     const dFrom = elFrom.value? new Date(elFrom.value) : new Date(0);
     const dTo = elTo.value? new Date(elTo.value) : new Date(8640000000000000); // max
+    const logEl = document.getElementById('logScale');
+    const useLog = !!(logEl && logEl.checked);
 
     const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
     updateKPIs(base, metric);
@@ -144,8 +170,10 @@
       });
     }
 
-    const showFc = document.getElementById('showFc').checked;
-    const showBands = document.getElementById('showBands').checked;
+    const sfEl = document.getElementById('showFc');
+    const sbEl = document.getElementById('showBands');
+    const showFc = sfEl ? sfEl.checked : false;
+    const showBands = sbEl ? sbEl.checked : false;
 
     if(showFc){
       const fc = FC.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r.yhat!=null);
@@ -172,8 +200,8 @@
     const layout = {
       margin:{l:60,r:20,t:10,b:40},
       paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
-      xaxis:{ showgrid:false, zeroline:false },
-      yaxis:{ showgrid:false, zeroline:false }
+      xaxis:{ showgrid:false, zeroline:false, title:"Fecha" },
+      yaxis:{ showgrid:false, zeroline:false, title: metric==='volume'?'Volumen':'Precio', type: useLog ? 'log' : 'linear' }
     };
     Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
   }
@@ -192,17 +220,24 @@
   const viewSerie=document.getElementById('viewSerie');
   const viewMetod=document.getElementById('viewMetodologia');
 
-  tabSerie.addEventListener('click', ()=>{ tabSerie.classList.add('active'); tabMetod.classList.remove('active'); viewSerie.hidden=false; viewMetod.hidden=true; });
-  tabMetod.addEventListener('click', ()=>{ tabMetod.classList.add('active'); tabSerie.classList.remove('active'); viewSerie.hidden=true; viewMetod.hidden=false; });
+  if (tabSerie && tabMetod && viewSerie && viewMetod){
+    tabSerie.addEventListener('click', ()=>{ tabSerie.classList.add('active'); tabMetod.classList.remove('active'); viewSerie.hidden=false; viewMetod.hidden=true; });
+    tabMetod.addEventListener('click', ()=>{ tabMetod.classList.add('active'); tabSerie.classList.remove('active'); viewSerie.hidden=true; viewMetod.hidden=false; });
+  }
 
   async function load() {
+    // panel de error reutilizable, cae al body si no existe #errorMessage
     const errBox = (msg) => {
-      const el = document.createElement("div");
-      el.className = "card";
-      el.style.marginTop = ".6rem";
-      el.style.borderColor = "#b03030";
-      el.innerHTML = `<strong>Error de carga:</strong> ${msg}`;
-      document.querySelector(".wrap").prepend(el);
+      const holder = document.getElementById('errorMessage');
+      const html = `<div class="card" style="margin-top:.6rem;border-left:4px solid #b03030">
+        <strong>Error de carga:</strong> ${msg}
+      </div>`;
+      if (holder){ holder.innerHTML = html; holder.style.display = 'block'; }
+      else {
+        const el = document.createElement("div");
+        el.innerHTML = html;
+        document.body.prepend(el);
+      }
     };
 
     try{
@@ -220,23 +255,24 @@
         ...fcRows.map(r => r.symbol).filter(Boolean)
       ])).sort();
 
-      elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
+      if (elSymbol){
+        elSymbol.innerHTML = SYMBOLS.map(s => `<option value="${s}">${s}</option>`).join("");
+      }
 
-      // === FIX: rango de fechas usando datos combinados (histórico ∪ proyección)
-      const allDates = [
-        ...histRows.map(r => r.date),
-        ...fcRows.map(r => r.date)
-      ].filter(d => d instanceof Date);
+      // rango de fechas usando datos combinados (histórico ∪ proyección)
+      const allDates = [...histRows.map(r=>r.date), ...fcRows.map(r=>r.date)].filter(d=> d instanceof Date);
       if(allDates.length){
         const maxDate = new Date(Math.max.apply(null, allDates));
         const minDate = new Date(maxDate); minDate.setFullYear(minDate.getFullYear() - 3);
-        document.getElementById('dateFrom').value = toISO(minDate);
-        document.getElementById('dateTo').value   = toISO(maxDate);
+        if (elFrom) elFrom.value = toISO(minDate);
+        if (elTo)   elTo.value   = toISO(maxDate);
       }else{
-        // fallback amplio
-        document.getElementById('dateFrom').value = "1990-01-01";
-        document.getElementById('dateTo').value   = toISO(new Date());
+        if (elFrom) elFrom.value = "1990-01-01";
+        if (elTo)   elTo.value   = toISO(new Date());
       }
+
+      // métrica por defecto coherente con entrenamiento
+      if (elMetric) elMetric.value = "adj_close";
 
       render();
     }catch(e){
@@ -246,9 +282,13 @@
   }
 
   window.addEventListener("DOMContentLoaded", ()=>{
-    ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo","showFc","showBands"]
+    ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo","showFc","showBands","logScale"]
       .map(id=>document.getElementById(id))
       .forEach(el=> el && el.addEventListener("change", render));
+    // Asegurar que Plotly esté disponible
+    if (typeof Plotly === "undefined") {
+      console.warn("Plotly no está cargado. Incluye <script src='https://cdn.plot.ly/plotly-2.24.1.min.js'></script> en <head>.");
+    }
     load();
   });
 </script>

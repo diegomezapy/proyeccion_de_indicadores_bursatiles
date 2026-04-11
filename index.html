@@ -1,632 +1,1133 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Tablero de Índices Bursátiles</title>
-  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-  <!-- MathJax para fórmulas -->
-  <script>
-    window.MathJax = { tex: {inlineMath: [['$', '$'], ['\\(', '\\)']]} };
-  </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor de Índices y Proyecciones</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
   <style>
     :root {
-      --bg-primary:#121212; --bg-secondary:#1e1e1e; --bg-card:#252525;
-      --text-primary:#f0f0f0; --text-secondary:#b0b0b0;
-      --accent:#3a86ff; --accent-hover:#2a76ef;
-      --success:#4caf50; --danger:#f44336; --warning:#ff9800; --border:#444;
+      --bg: #f3f5f7;
+      --panel: #ffffff;
+      --panel-2: #f9fbfd;
+      --ink: #112031;
+      --muted: #5a6b7c;
+      --line: #d9e1e8;
+      --brand: #0f766e;
+      --brand-2: #0b5f58;
+      --accent: #ea580c;
+      --ok: #0f9d58;
+      --bad: #c81e1e;
+      --radius: 16px;
+      --shadow: 0 10px 30px rgba(17, 32, 49, 0.08);
     }
-    .light-mode {
-      --bg-primary:#f5f7fa; --bg-secondary:#fff; --bg-card:#fff;
-      --text-primary:#333; --text-secondary:#666; --accent:#3a86ff; --accent-hover:#2a76ef;
-      --success:#4caf50; --danger:#f44336; --warning:#ff9800; --border:#e0e0e0;
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Manrope", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% -10%, #d9f3ee 0%, transparent 50%),
+        radial-gradient(circle at 90% 0%, #fde9dd 0%, transparent 45%),
+        var(--bg);
     }
-    *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
-    body{background:var(--bg-primary);color:var(--text-primary);transition:background .3s,color .3s}
-    .container{max-width:1400px;margin:0 auto;padding:20px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid var(--border)}
-    .logo{display:flex;align-items:center;gap:10px}
-    .logo h1{font-size:1.8rem;font-weight:600}
-    .logo-icon{font-size:1.8rem;color:var(--accent)}
-    .controls{display:flex;gap:15px;align-items:center}
-    .theme-toggle{background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;transition:background .3s}
-    .theme-toggle:hover{background:var(--bg-secondary)}
-    .dashboard{display:grid;grid-template-columns:300px 1fr;gap:20px}
-    .sidebar{background:var(--bg-secondary);border-radius:10px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,.1);display:flex;flex-direction:column;gap:20px}
-    .card{background:var(--bg-card);border-radius:8px;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-    .card-title{font-size:1.1rem;margin-bottom:15px;color:var(--text-primary);display:flex;align-items:center;gap:8px}
-    .card-title i{color:var(--accent)}
-    .form-group{margin-bottom:15px}
-    label{display:block;margin-bottom:5px;font-size:.9rem;color:var(--text-secondary)}
-    select,input{width:100%;padding:10px;border-radius:5px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:.9rem}
-    select:focus,input:focus{outline:none;border-color:var(--accent)}
-    .checkbox-group{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-    .checkbox-group input{width:auto}
-    .checkbox-group label{margin-bottom:0}
-    .btn{background:var(--accent);color:#fff;border:none;border-radius:5px;padding:10px 15px;cursor:pointer;font-size:.9rem;transition:background .3s;display:flex;align-items:center;justify-content:center;gap:5px}
-    .btn:hover{background:var(--accent-hover)}
-    .btn-secondary{background:transparent;border:1px solid var(--border);color:var(--text-primary)}
-    .btn-secondary:hover{background:var(--bg-secondary)}
-    .main-content{display:flex;flex-direction:column;gap:20px}
-    .tabs{display:flex;background:var(--bg-secondary);border-radius:10px;overflow:hidden}
-    .tab{padding:12px 20px;cursor:pointer;transition:background .3s;text-align:center;flex:1;font-weight:500}
-    .tab.active{background:var(--accent);color:#fff}
-    .tab:not(.active):hover{background:var(--bg-card)}
-    .tab-content{display:none;background:var(--bg-secondary);border-radius:10px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,.1)}
-    .tab-content.active{display:block}
-    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}
-    .kpi-card{background:var(--bg-card);border-radius:8px;padding:15px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-    .kpi-value{font-size:1.8rem;font-weight:700;margin:10px 0}
-    .kpi-label{font-size:.9rem;color:var(--text-secondary)}
-    .chart-container{background:var(--bg-card);border-radius:8px;padding:15px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.1);height:400px}
-    .chart-title{font-size:1.1rem;margin-bottom:15px;color:var(--text-primary)}
-    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px}
-    .stat-card{background:var(--bg-card);border-radius:8px;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-    .stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
-    .stat-row:last-child{border-bottom:none}
-    .stat-label{color:var(--text-secondary)}
-    .stat-value{font-weight:500}
-    .methodology-content{line-height:1.65}
-    .methodology-content h3{margin:20px 0 10px;color:var(--accent)}
-    .methodology-content p{margin-bottom:12px}
-    .methodology-content ul{margin-left:20px;margin-bottom:12px}
-    .loader{display:none;text-align:center;padding:20px}
-    .loader-spinner{border:4px solid var(--border);border-top:4px solid var(--accent);border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 10px}
-    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-    .error-message{background-color:rgba(244,67,54,.1);border-left:4px solid var(--danger);padding:15px;margin:15px 0;border-radius:4px}
-    @media (max-width:1024px){.dashboard{grid-template-columns:1fr}.sidebar{order:2}.main-content{order:1}}
-    @media (max-width:768px){.kpi-grid{grid-template-columns:1fr 1fr}.stats-grid{grid-template-columns:1fr}header{flex-direction:column;align-items:flex-start;gap:15px}.controls{width:100%;justify-content:space-between}}
+
+    .wrap {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero {
+      background: linear-gradient(120deg, #0f766e, #155e75);
+      color: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 2.7vw, 2rem);
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.9);
+      max-width: 980px;
+      line-height: 1.5;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 999px;
+      font-size: 0.87rem;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .side {
+      position: sticky;
+      top: 16px;
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .block {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: var(--panel-2);
+      display: grid;
+      gap: 10px;
+    }
+
+    .block h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    input, select, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    input, select {
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .checks {
+      display: grid;
+      gap: 8px;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: var(--ink);
+    }
+
+    .check input { width: auto; margin: 0; }
+
+    .btn {
+      background: var(--brand);
+      color: #fff;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform 0.12s ease, background 0.12s ease;
+    }
+
+    .btn:hover { background: var(--brand-2); transform: translateY(-1px); }
+
+    .main {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .kpi {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 96px;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+
+    .kpi .name {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .kpi .value {
+      font-size: 1.22rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-2);
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+    }
+
+    .chart {
+      width: 100%;
+      height: 380px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat-list {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px dashed var(--line);
+      padding-bottom: 6px;
+      font-size: 0.9rem;
+    }
+
+    .stat-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .stat-row .label { color: var(--muted); }
+    .stat-row .val { font-weight: 700; }
+
+    .method p, .method li {
+      color: var(--ink);
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+
+    .method ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      text-align: right;
+    }
+
+    th {
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.73rem;
+      color: var(--muted);
+      background: #f4f8fb;
+    }
+
+    th:first-child, td:first-child { text-align: left; }
+    tbody tr:hover { background: #f7fafc; }
+
+    .status {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .error {
+      border-color: #f6cccc;
+      background: #fff3f2;
+      color: #8c2323;
+    }
+
+    @media (max-width: 1200px) {
+      .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
+      .side { position: static; }
+    }
+
+    @media (max-width: 780px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stats-grid { grid-template-columns: 1fr; }
+      .chart { height: 320px; }
+      .row-2 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <div class="logo"><div class="logo-icon">📊</div><h1>Tablero de Índices Bursátiles</h1></div>
-    <div class="controls">
-      <button class="btn" id="refreshBtn"><i>↻</i> Actualizar Datos</button>
-      <button class="theme-toggle" id="themeToggle"><i>🌙</i></button>
-    </div>
-  </header>
-
-  <div class="dashboard">
-    <div class="sidebar">
-      <div class="card">
-        <h3 class="card-title"><i>⚙️</i> Configuración de Datos</h3>
-        <div class="form-group">
-          <label for="sheetUrl">URL Hoja Histórica</label>
-          <input type="text" id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices">
-        </div>
-        <div class="form-group">
-          <label for="fcUrl">URL Hoja Proyección</label>
-          <input type="text" id="fcUrl" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d">
-        </div>
-        <button class="btn" id="loadDataBtn"><i>📥</i> Cargar Datos</button>
+  <div class="wrap">
+    <section class="hero panel">
+      <h1>Monitor de Índices Bursátiles y Proyección de Corto Plazo</h1>
+      <p>
+        Tablero de lectura directa desde Google Sheets (GViz JSON). Diseñado para trazabilidad metodológica
+        y reutilización de insumos en investigación, reporting y automatizaciones downstream.
+      </p>
+      <div class="hero-meta">
+        <span class="pill">Modelo: ARIMA log-retornos + fallback naive drift</span>
+        <span class="pill" id="statusSymbols">Símbolos: -</span>
+        <span class="pill" id="statusUpdated">Última carga: -</span>
       </div>
+    </section>
 
-      <div class="card">
-        <h3 class="card-title"><i>🔍</i> Filtros de Análisis</h3>
-        <div class="form-group">
-          <label for="symbol">Índice</label>
-          <select id="symbol"><option value="">Cargando...</option></select>
-        </div>
-        <div class="form-group">
-          <label for="metric">Métrica</label>
-          <select id="metric">
-            <option value="adj_close">Cierre Ajustado</option>
-            <option value="close">Precio de Cierre</option>
-            <option value="open">Precio de Apertura</option>
-            <option value="high">Precio Máximo</option>
-            <option value="low">Precio Mínimo</option>
-            <option value="volume">Volumen</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="ret">Tipo de Retorno</label>
-          <select id="ret">
-            <option value="level">Nivel</option>
-            <option value="ret_d">Retorno Diario (simple)</option>
-            <option value="ret_cum">Retorno Acumulado (simple)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="smooth">Suavizado (Media Móvil)</label>
-          <select id="smooth">
-            <option value="1">Sin Suavizado</option>
-            <option value="5">5 días</option>
-            <option value="10">10 días</option>
-            <option value="20">20 días</option>
-            <option value="50">50 días</option>
-          </select>
-        </div>
-        <div class="form-group"><label for="dateFrom">Fecha Desde</label><input type="date" id="dateFrom"></div>
-        <div class="form-group"><label for="dateTo">Fecha Hasta</label><input type="date" id="dateTo"></div>
-        <div class="checkbox-group"><input type="checkbox" id="showFc" checked><label for="showFc">Mostrar Proyección</label></div>
-        <div class="checkbox-group"><input type="checkbox" id="showBands" checked><label for="showBands">Mostrar Bandas de Confianza</label></div>
-        <div class="checkbox-group"><input type="checkbox" id="logScale"><label for="logScale">Escala Logarítmica</label></div>
-      </div>
-    </div>
-
-    <div class="main-content">
-      <div class="tabs">
-        <div class="tab active" data-tab="series">Series Temporales</div>
-        <div class="tab" data-tab="stats">Estadísticas</div>
-        <div class="tab" data-tab="methodology">Metodología</div>
-      </div>
-
-      <div class="loader" id="loader"><div class="loader-spinner"></div><p>Cargando datos...</p></div>
-      <div class="error-message" id="errorMessage" style="display:none;"></div>
-
-      <div class="tab-content active" id="seriesTab">
-        <div class="kpi-grid">
-          <div class="kpi-card"><div class="kpi-label">Último Valor</div><div class="kpi-value" id="kpi_last">—</div><div class="kpi-label" id="kpi_last_date">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">MTD</div><div class="kpi-value" id="kpi_mtd">—</div><div class="kpi-label">Mes a la fecha</div></div>
-          <div class="kpi-card"><div class="kpi-label">YTD</div><div class="kpi-value" id="kpi_ytd">—</div><div class="kpi-label">Año a la fecha</div></div>
-          <div class="kpi-card"><div class="kpi-label">Volatilidad Anual</div><div class="kpi-value" id="kpi_volatility">—</div><div class="kpi-label">Desviación estándar anualizada</div></div>
-        </div>
-
-        <div class="chart-container">
-          <div class="chart-title">Evolución del Índice</div>
-          <div id="chart"></div>
-        </div>
-
-        <div class="chart-container">
-          <div class="chart-title">Retornos Diarios</div>
-          <div id="returnsChart"></div>
-        </div>
-      </div>
-
-      <div class="tab-content" id="statsTab">
-        <div class="chart-container">
-          <div class="chart-title">Distribución de Retornos</div>
-          <div id="distributionChart"></div>
-        </div>
-
-        <div class="stats-grid">
-          <div class="stat-card">
-            <h3 class="card-title"><i>📈</i> Estadísticas Descriptivas</h3>
-            <div class="stat-row"><span class="stat-label">Media</span><span class="stat-value" id="stat_mean">—</span></div>
-            <div class="stat-row"><span class="stat-label">Mediana</span><span class="stat-value" id="stat_median">—</span></div>
-            <div class="stat-row"><span class="stat-label">Desviación Estándar</span><span class="stat-value" id="stat_std">—</span></div>
-            <div class="stat-row"><span class="stat-label">Mínimo</span><span class="stat-value" id="stat_min">—</span></div>
-            <div class="stat-row"><span class="stat-label">Máximo</span><span class="stat-value" id="stat_max">—</span></div>
-            <div class="stat-row"><span class="stat-label">Asimetría</span><span class="stat-value" id="stat_skew">—</span></div>
-            <div class="stat-row"><span class="stat-label">Curtosis</span><span class="stat-value" id="stat_kurtosis">—</span></div>
+    <section class="grid">
+      <aside class="panel side">
+        <div class="block">
+          <h3>Origen de datos</h3>
+          <p class="hint">Puedes cambiar URLs GViz si apuntas a otra hoja con el mismo esquema.</p>
+          <div>
+            <label for="sheetUrl">URL histórica (sheet=indices)</label>
+            <input id="sheetUrl" type="text" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=indices" />
           </div>
-          <div class="stat-card">
-            <h3 class="card-title"><i>📊</i> Métricas de Riesgo</h3>
-            <div class="stat-row"><span class="stat-label">Volatilidad Anual</span><span class="stat-value" id="risk_volatility">—</span></div>
-            <div class="stat-row"><span class="stat-label">VaR 95% (1 día)</span><span class="stat-value" id="risk_var">—</span></div>
-            <div class="stat-row"><span class="stat-label">Ratio Sharpe</span><span class="stat-value" id="risk_sharpe">—</span></div>
-            <div class="stat-row"><span class="stat-label">Máxima Caída</span><span class="stat-value" id="risk_maxdd">—</span></div>
-            <div class="stat-row"><span class="stat-label">Ratio Calmar</span><span class="stat-value" id="risk_calmar">—</span></div>
+          <div>
+            <label for="fcUrl">URL proyección (sheet=proyecciones_30d)</label>
+            <input id="fcUrl" type="text" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d" />
+          </div>
+          <button id="loadBtn" class="btn">Cargar / Actualizar</button>
+        </div>
+
+        <div class="block">
+          <h3>Filtros</h3>
+          <div>
+            <label for="symbol">Índice</label>
+            <select id="symbol"></select>
+          </div>
+          <div>
+            <label for="metric">Métrica</label>
+            <select id="metric">
+              <option value="adj_close">Cierre ajustado</option>
+              <option value="close">Cierre</option>
+              <option value="open">Apertura</option>
+              <option value="high">Máximo</option>
+              <option value="low">Mínimo</option>
+              <option value="volume">Volumen</option>
+            </select>
+          </div>
+          <div>
+            <label for="retMode">Transformación visual</label>
+            <select id="retMode">
+              <option value="level">Nivel</option>
+              <option value="ret_d">Retorno diario</option>
+              <option value="ret_cum">Retorno acumulado</option>
+            </select>
+          </div>
+          <div>
+            <label for="smooth">Suavizado</label>
+            <select id="smooth">
+              <option value="1">Sin suavizado</option>
+              <option value="5">Media móvil 5d</option>
+              <option value="10">Media móvil 10d</option>
+              <option value="20">Media móvil 20d</option>
+              <option value="50">Media móvil 50d</option>
+            </select>
+          </div>
+          <div class="row-2">
+            <div>
+              <label for="dateFrom">Desde</label>
+              <input id="dateFrom" type="date" />
+            </div>
+            <div>
+              <label for="dateTo">Hasta</label>
+              <input id="dateTo" type="date" />
+            </div>
+          </div>
+          <div class="checks">
+            <label class="check"><input id="showFc" type="checkbox" checked /> Mostrar proyección</label>
+            <label class="check"><input id="showBands" type="checkbox" checked /> Mostrar banda IC95%</label>
+            <label class="check"><input id="logScale" type="checkbox" /> Escala logarítmica</label>
           </div>
         </div>
-      </div>
 
-      <div class="tab-content" id="methodologyTab">
-        <div class="methodology-content" id="methodologyContent">
-          <!-- Se completa por HTML estático abajo (queda visible incluso sin datos) -->
-          <h3>Metodología del Análisis</h3>
-          <p>Este tablero visualiza series históricas y proyecciones a corto plazo de índices bursátiles. Las proyecciones se calculan fuera del navegador y se leen desde la hoja <code>proyecciones_30d</code>. El modelo base trabaja con <em>retornos logarítmicos</em> para garantizar positividad y composición multiplicativa en niveles.</p>
+        <div id="statusBox" class="status">Esperando primera carga...</div>
+      </aside>
 
-          <h3>Modelo de Retornos y Proyección</h3>
-          <p>Sea $P_t$ el precio ajustado de cierre. Definimos el retorno logarítmico diario $r_t = \log P_t - \log P_{t-1}$. Para cada símbolo:</p>
-          <ul>
-            <li><strong>ARIMA(p,0,q) en $r_t$</strong>, con selección de orden por $AIC_c$. Se pronostican $\\{\\hat r_{t+\\tau}\\}_{\\tau=1}^h$ y una desviación estándar por paso $se_{\\tau}$. El retorno acumulado a $h$ días es $S_h=\\sum_{\\tau=1}^h r_{t+\\tau}$ con media $\\hat \\mu_h=\\sum \\hat r_{t+\\tau}$ y desviación aproximada $\\hat\\sigma_h = \\sqrt{\\sum se_{\\tau}^2}$.</li>
-            <li><strong>Fallback naive-drift</strong> si no hay ajuste ARIMA robusto: estima media $\\mu$ y desvío $\\sigma$ de $r_t$ en una ventana reciente y winsorizada, y usa $\\mathbb{E}[S_h]=\\mu h$ y $\\mathrm{sd}(S_h)=\\sigma \\sqrt{h}$.</li>
-          </ul>
-          <p>Las predicciones en nivel se obtienen por transformación log-normal:</p>
-          <p style="margin-left:12px">
-            $\\displaystyle \\hat P_{t+h} = P_t\\, e^{\\hat\\mu_h}$, &nbsp;
-            $\\hat P_{t+h}^{\\text{lo}} = P_t\\, e^{\\hat\\mu_h - z_{0.975}\\hat\\sigma_h}$, &nbsp;
-            $\\hat P_{t+h}^{\\text{hi}} = P_t\\, e^{\\hat\\mu_h + z_{0.975}\\hat\\sigma_h}$.
-          </p>
+      <main class="panel main">
+        <section class="kpis">
+          <article class="kpi"><span class="name">Último valor</span><span class="value" id="kpiLast">-</span></article>
+          <article class="kpi"><span class="name">MTD</span><span class="value" id="kpiMtd">-</span></article>
+          <article class="kpi"><span class="name">YTD</span><span class="value" id="kpiYtd">-</span></article>
+          <article class="kpi"><span class="name">Vol. anual</span><span class="value" id="kpiVol">-</span></article>
+          <article class="kpi"><span class="name">Max Drawdown</span><span class="value" id="kpiDd">-</span></article>
+        </section>
 
-          <h3>Estimación</h3>
-          <ul>
-            <li><em>Ventana de deriva</em>: por defecto 252 días para el componente naive, con winsorización al 1 por ciento.</li>
-            <li><em>Métrica de entrenamiento</em>: siempre <code>adj_close</code>. La UI permite visualizar otras métricas, pero la proyección se basa en cierre ajustado.</li>
-            <li><em>Símbolos especiales</em>: para <code>^VIX</code> se fuerza $\\mu=0$ en la rama naive por su dinámica no log-normal.</li>
-          </ul>
+        <section class="tabs">
+          <button class="tab active" data-tab="charts">Series y Retornos</button>
+          <button class="tab" data-tab="stats">Estadísticas</button>
+          <button class="tab" data-tab="forecast">Tabla de Proyección</button>
+          <button class="tab" data-tab="method">Metodología</button>
+        </section>
 
-          <h3>Métricas de Riesgo</h3>
-          <ul>
-            <li><strong>Volatilidad anualizada</strong> de retornos simples: $\\hat\\sigma_{\\text{ann}}=\\hat\\sigma_{\\text{daily}}\\sqrt{252}$.</li>
-            <li><strong>VaR 95% (1 día)</strong>: percentil 5 de la distribución empírica de retornos, reportado como <em>pérdida positiva</em>.</li>
-            <li><strong>Sharpe</strong>: $\\frac{252\\,\\bar r - r_f}{\\hat\\sigma_{\\text{ann}}}$.</li>
-            <li><strong>Máxima caída</strong> (drawdown máximo) sobre niveles.</li>
-            <li><strong>Calmar</strong>: $\\frac{\\text{CAGR}}{\\text{MaxDD}}$ con $\\text{CAGR}=(\\frac{P_T}{P_0})^{252/n}-1$.</li>
-          </ul>
+        <section id="view-charts" class="view active">
+          <article class="card">
+            <h3>Serie histórica y proyección</h3>
+            <div id="chartMain" class="chart"></div>
+          </article>
+          <article class="card">
+            <h3>Retornos diarios</h3>
+            <div id="chartReturns" class="chart"></div>
+          </article>
+        </section>
 
-          <h3>Supuestos y Advertencias</h3>
-          <ul>
-            <li>Horizonte corto, $h\\le 30$ días hábiles. La varianza se escala como $\\sqrt{h}$ bajo varianza condicional aproximadamente constante.</li>
-            <li>Los intervalos de ARIMA acumulan la incertidumbre por pasos como $\\sqrt{\\sum se_{\\tau}^2}$, aproximación que ignora covarianzas. Para uso operativo conviene contrastar con backtesting <em>walk-forward</em>.</li>
-            <li>Eventos de cola gruesa, cierres o <em>circuit breakers</em> pueden invalidar la normalidad log y ensanchar empíricamente los colas respecto de los IC gaussianos.</li>
-            <li>Usa precios ajustados para mitigar saltos por dividendos o <em>splits</em>. Para métricas de retorno en la UI se muestran retornos simples por claridad visual.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
+        <section id="view-stats" class="view">
+          <article class="card">
+            <h3>Distribución de retornos</h3>
+            <div id="chartDist" class="chart"></div>
+          </article>
+          <article class="stats-grid">
+            <div class="stat-list" id="statsA"></div>
+            <div class="stat-list" id="statsB"></div>
+          </article>
+        </section>
+
+        <section id="view-forecast" class="view">
+          <article class="card">
+            <h3>Próximos horizontes proyectados (top 15)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>h</th>
+                  <th>yhat</th>
+                  <th>IC95% inferior</th>
+                  <th>IC95% superior</th>
+                  <th>Cambio vs último obs.</th>
+                </tr>
+              </thead>
+              <tbody id="forecastBody"></tbody>
+            </table>
+          </article>
+        </section>
+
+        <section id="view-method" class="view">
+          <article class="card method">
+            <h3>Metodología resumida</h3>
+            <p>El pipeline estima retornos logarítmicos sobre <code>adj_close</code> y aplica ARIMA(p,0,q) con selección por AICc. Cuando no hay suficiente historia o el ajuste no converge, usa un fallback naive-drift.</p>
+            <ul>
+              <li><strong>Modelo base:</strong> ARIMA en retornos logarítmicos con búsqueda en grilla para p y q.</li>
+              <li><strong>Robustez:</strong> winsorización al 1% de retornos para reducir sensibilidad a outliers extremos.</li>
+              <li><strong>Bandas de confianza:</strong> reconstrucción al nivel por transformación log-normal con IC95% aproximado.</li>
+              <li><strong>Trazabilidad:</strong> cada corrida incluye <code>run_id</code> e <code>ingestion_ts</code>.</li>
+              <li><strong>Limitación importante:</strong> no modela explícitamente cambios de régimen ni feriados por mercado.</li>
+            </ul>
+            <p>Documentación completa: <code>docs/METODOLOGIA.md</code> y <code>docs/DICCIONARIO_DATOS.md</code>.</p>
+          </article>
+        </section>
+      </main>
+    </section>
   </div>
-</div>
 
-<script>
-  // === Utilidades ===
-  function toISO(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),da=String(d.getDate()).padStart(2,"0");return `${y}-${m}-${da}`;}
-  function rollingMean(arr,k){if(k<=1) return arr.slice();const out=new Array(arr.length).fill(null);let s=0,q=[];for(let i=0;i<arr.length;i++){const v=arr[i]==null?NaN:Number(arr[i]);q.push(v);s+=v;if(q.length>k) s-=q.shift();if(q.length===k) out[i]=s/k;}return out;}
-  function formatPct(x){if(x==null||isNaN(x)) return "—";return (x*100).toFixed(2)+"%";}
-  function formatNumber(x,decimals=2){if(x==null||isNaN(x)) return "—";return Number(x).toLocaleString(undefined,{minimumFractionDigits:decimals,maximumFractionDigits:decimals});}
-
-  function parseGvizDate(val){
-    if(val==null) return null;
-    if(val instanceof Date) return val;
-    if(typeof val==="number") return new Date(val);
-    if(typeof val==="string"){
-      const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)/);
-      if(m){const y=+m[1],mo=+m[2],d=+(m[3]??1),hh=+(m[4]??0),mi=+(m[5]??0),ss=+(m[6]??0);return new Date(y,mo,d,hh,mi,ss);}
-      const dISO = new Date(val); if(!isNaN(dISO)) return dISO;
-    } return null;
-  }
-
-  async function fetchGvizJSON(url){
-    const res = await fetch(url,{cache:"no-store"});
-    if(!res.ok) throw new Error(`Error HTTP: ${res.status}`);
-    const text = await res.text();
-    const start = text.indexOf("{"), end = text.lastIndexOf("}");
-    if(start===-1 || end===-1) throw new Error("La respuesta no parece ser JSON de gviz.");
-    return JSON.parse(text.slice(start,end+1));
-  }
-
-  function gvizToObjects(gviz){
-    const cols = gviz.table.cols.map(c => (c.label || c.id || "").trim());
-    const out = [];
-    for(const row of gviz.table.rows){
-      const obj={};
-      for(let i=0;i<cols.length;i++){const cell=row.c[i]; obj[cols[i]]=cell ? (cell.v ?? null) : null;}
-      out.push(obj);
-    }
-    return out;
-  }
-
-  function coerceHistoricalRows(rows){
-    const priceCols=["open","high","low","close","adj_close"];
-    rows.forEach(r=>{
-      r.symbol = r.BOL != null ? String(r.BOL) : (r.symbol!=null?String(r.symbol):null);
-      r.date = parseGvizDate(r["marca de diagnóstico"] ?? r.date);
-      priceCols.forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
-      r.volume = r.volume==null || r.volume==="" ? null : Number(r.volume);
-    });
-    rows = rows.filter(r => r.date instanceof Date && (r.adj_close!=null || r.close!=null || r.open!=null || r.high!=null || r.low!=null));
-    rows.sort((a,b)=> a.symbol.localeCompare(b.symbol) || a.date - b.date);
-    return rows;
-  }
-
-  function coerceForecastRows(rows){
-    rows.forEach(r=>{
-      r.symbol = r.symbol!=null ? String(r.symbol) : null;
-      r.date = parseGvizDate(r.date);
-      r.fc_h = r.fc_h==null || r.fc_h==="" ? null : Number(r.fc_h);
-      ["yhat","yhat_lo","yhat_hi","last_obs_value"].forEach(k => { r[k] = r[k]==null || r[k]==="" ? null : Number(r[k]); });
-      r.last_obs_date = parseGvizDate(r.last_obs_date);
-    });
-    rows = rows.filter(r => r.date instanceof Date && r.yhat!=null);
-    rows.sort((a,b)=> a.symbol.localeCompare(b.symbol) || a.date - b.date || (a.fc_h??0)-(b.fc_h??0));
-    return rows;
-  }
-
-  // === Análisis ===
-  function computeReturnsSimple(values){
-    const out=[]; for(let i=1;i<values.length;i++){
-      const a=values[i-1], b=values[i];
-      out.push(a!=null && b!=null && a!==0 ? (b/a - 1) : null);
-    } return out;
-  }
-
-  function computeVolatility(returns, annualize=true){
-    const valid = returns.filter(r => r!=null);
-    if(valid.length<2) return null;
-    const mean = valid.reduce((a,b)=>a+b,0)/valid.length;
-    const variance = valid.reduce((a,b)=>a+(b-mean)*(b-mean),0)/(valid.length-1);
-    const sd = Math.sqrt(variance);
-    return annualize ? sd*Math.sqrt(252) : sd;
-  }
-
-  function computeVaRpos(returns){ // pérdida positiva
-    const valid = returns.filter(r => r!=null).slice().sort((a,b)=>a-b);
-    if(!valid.length) return null;
-    const idx = Math.floor(valid.length*0.05);
-    const q05 = valid[idx];
-    return q05!=null ? -q05 : null; // como pérdida positiva
-  }
-
-  function computeMaxDrawdown(prices){
-    let peak=-Infinity, maxDD=0;
-    for(const p of prices){ if(p!=null){ if(p>peak) peak=p; const dd=(peak-p)/peak; if(dd>maxDD) maxDD=dd; } }
-    return maxDD;
-  }
-
-  function computeSharpe(returns, rf=0.02){
-    const valid = returns.filter(r=>r!=null);
-    if(valid.length<2) return null;
-    const mean = valid.reduce((a,b)=>a+b,0)/valid.length;
-    const volA = computeVolatility(valid, true);
-    return volA && volA!==0 ? (mean*252 - rf)/volA : null;
+  <script>
+    function toISO(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
     }
 
-  function computeCAGR(prices){
-    const vals = prices.filter(v=>v!=null);
-    if(vals.length<2) return null;
-    const n = vals.length; // días hábiles aproximados
-    const cagr = Math.pow(vals[vals.length-1]/vals[0], 252/n) - 1;
-    return cagr;
-  }
-
-  function computeStats(records, metric){
-    const values = records.map(r=>r[metric]).filter(v=>v!=null);
-    if(values.length===0) return {};
-
-    const sorted = values.slice().sort((a,b)=>a-b);
-    const mean = sorted.reduce((a,b)=>a+b,0)/sorted.length;
-    const median = sorted.length%2===0 ? (sorted[sorted.length/2 -1] + sorted[sorted.length/2])/2 : sorted[Math.floor(sorted.length/2)];
-    const variance = sorted.reduce((a,b)=>a+(b-mean)*(b-mean),0)/(sorted.length-1);
-    const std = Math.sqrt(variance);
-
-    const returns = computeReturnsSimple(values);
-    const validR = returns.filter(r=>r!=null);
-
-    // Asimetría y curtosis muestrales simples
-    const skew = sorted.length>2 ? sorted.reduce((a,b)=>a+Math.pow((b-mean)/std,3),0)/sorted.length : null;
-    const kurt = sorted.length>3 ? sorted.reduce((a,b)=>a+Math.pow((b-mean)/std,4),0)/sorted.length - 3 : null;
-
-    const volA = computeVolatility(validR, true);
-    const varPos = computeVaRpos(validR);
-    const maxDD = computeMaxDrawdown(values);
-    const sharpe = computeSharpe(validR);
-    const cagr = computeCAGR(values);
-    const calmar = cagr!=null && maxDD>0 ? cagr/maxDD : null;
-
-    return {mean, median, min:sorted[0], max:sorted[sorted.length-1], std, skew, kurtosis:kurt,
-            volatility:volA, varPos, maxDD, sharpe, calmar};
-  }
-
-  function computeSeries(records, metric, retMode, smoothK){
-    const x = records.map(r=>r.date);
-    const y0 = records.map(r=>r[metric]);
-    let y = y0.slice();
-
-    if(retMode==="ret_d"){
-      y = y.map((v,i)=> i===0 || v==null || y0[i-1]==null ? null : (v/y0[i-1]-1));
-    } else if(retMode==="ret_cum"){
-      let acc=1;
-      y = y.map((v,i)=>{ if(i===0 || v==null || y0[i-1]==null) return 0; const r=v/y0[i-1]-1; acc*=(1+r); return acc-1; });
+    function num(v) {
+      if (v === null || v === undefined || v === "") return null;
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      const parsed = Number(String(v).replace(/\s+/g, "").replace(/,/g, ""));
+      return Number.isFinite(parsed) ? parsed : null;
     }
-    const k=Number(smoothK);
-    if(k>1 && retMode==="level"){ return {x, y: rollingMean(y,k)}; }
-    return {x,y};
-  }
 
-  // === Estado ===
-  let DATA=[], FC=[], SYMBOLS=[];
-  const elSymbol=document.getElementById('symbol');
-  const elMetric=document.getElementById('metric');
-  const elRet=document.getElementById('ret');
-  const elSmooth=document.getElementById('smooth');
-  const elFrom=document.getElementById('dateFrom');
-  const elTo=document.getElementById('dateTo');
-  const elLoader=document.getElementById('loader');
-  const elErrorMessage=document.getElementById('errorMessage');
+    function parseGvizDate(val) {
+      if (val == null) return null;
+      if (val instanceof Date) return val;
+      if (typeof val === "number") return new Date(val);
+      if (typeof val === "string") {
+        const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)$/);
+        if (m) {
+          const y = Number(m[1]);
+          const mo = Number(m[2]);
+          const d = Number(m[3] || 1);
+          const h = Number(m[4] || 0);
+          const mi = Number(m[5] || 0);
+          const s = Number(m[6] || 0);
+          return new Date(y, mo, d, h, mi, s);
+        }
+        const iso = new Date(val);
+        if (!Number.isNaN(iso.getTime())) return iso;
+      }
+      return null;
+    }
 
-  // === UI helpers ===
-  function showLoader(){elLoader.style.display='block'; elErrorMessage.style.display='none';}
-  function hideLoader(){elLoader.style.display='none';}
-  function showError(msg){elErrorMessage.textContent=msg; elErrorMessage.style.display='block'; hideLoader();}
+    function pick(obj, aliases) {
+      for (const key of aliases) {
+        if (obj[key] !== undefined && obj[key] !== null && obj[key] !== "") return obj[key];
+      }
+      return null;
+    }
 
-  // === Render ===
-  function updateKPIs(records, metric, stats){
-    const elLast=document.getElementById('kpi_last');
-    const elMtd=document.getElementById('kpi_mtd');
-    const elYtd=document.getElementById('kpi_ytd');
-    const elVol=document.getElementById('kpi_volatility');
-    const elDate=document.getElementById('kpi_last_date');
+    async function fetchGvizJSON(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status} al leer GViz`);
+      const text = await res.text();
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      if (start === -1 || end === -1) {
+        throw new Error("La respuesta no parece GViz JSON. Verifica permisos públicos de la hoja.");
+      }
+      return JSON.parse(text.slice(start, end + 1));
+    }
 
-    if(!records.length){ elLast.textContent="—"; elMtd.textContent="—"; elYtd.textContent="—"; elVol.textContent="—"; elDate.textContent="—"; return; }
-
-    const lastRec = records[records.length-1];
-    const last = lastRec[metric];
-    const d = lastRec.date;
-
-    const firstMonth = new Date(d.getFullYear(), d.getMonth(), 1);
-    const mRecords = records.filter(r=> r.date >= firstMonth && r[metric]!=null);
-    let mtd=null; if(mRecords.length>=2){ const base=mRecords[0][metric], end=mRecords[mRecords.length-1][metric]; mtd = base ? (end/base -1) : null; }
-
-    const firstYear = new Date(d.getFullYear(),0,1);
-    const yRecords = records.filter(r=> r.date >= firstYear && r[metric]!=null);
-    let ytd=null; if(yRecords.length>=2){ const base=yRecords[0][metric], end=yRecords[yRecords.length-1][metric]; ytd = base ? (end/base -1) : null; }
-
-    elLast.textContent = last==null ? "—" : formatNumber(last);
-    elMtd.textContent = formatPct(mtd);
-    elYtd.textContent = formatPct(ytd);
-    elVol.textContent = stats.volatility ? formatPct(stats.volatility) : "—";
-    elDate.textContent = toISO(d);
-  }
-
-  function updateStats(stats){
-    document.getElementById('stat_mean').textContent   = formatNumber(stats.mean);
-    document.getElementById('stat_median').textContent = formatNumber(stats.median);
-    document.getElementById('stat_std').textContent    = formatNumber(stats.std);
-    document.getElementById('stat_min').textContent    = formatNumber(stats.min);
-    document.getElementById('stat_max').textContent    = formatNumber(stats.max);
-    document.getElementById('stat_skew').textContent   = formatNumber(stats.skew,4);
-    document.getElementById('stat_kurtosis').textContent = formatNumber(stats.kurtosis,4);
-
-    document.getElementById('risk_volatility').textContent = formatPct(stats.volatility);
-    document.getElementById('risk_var').textContent        = formatPct(stats.varPos);
-    document.getElementById('risk_sharpe').textContent     = formatNumber(stats.sharpe,3);
-    document.getElementById('risk_maxdd').textContent      = formatPct(stats.maxDD);
-    document.getElementById('risk_calmar').textContent     = formatNumber(stats.calmar,3);
-  }
-
-  function renderMainChart(){
-    const sym = elSymbol.value || (SYMBOLS[0] || "");
-    const metric = elMetric.value;
-    const retMode = elRet.value;
-    const smoothK = elSmooth.value;
-    const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
-    const dTo   = elTo.value   ? new Date(elTo.value)   : new Date(8640000000000000);
-    const logScale = document.getElementById('logScale').checked;
-
-    const base = DATA.filter(r => r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
-    const stats = computeStats(base, metric);
-    updateKPIs(base, metric, stats);
-    updateStats(stats);
-
-    const {x,y} = computeSeries(base, metric, retMode, smoothK);
-    const traces = [];
-    if(x.length){
-      traces.push({
-        x, y, mode:"lines", line:{width:2,color:'#3a86ff'},
-        name:`${sym} - Histórico`,
-        hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>"
+    function gvizToObjects(gviz) {
+      const cols = gviz.table.cols.map((c) => (c.label || c.id || "").trim());
+      return gviz.table.rows.map((row) => {
+        const obj = {};
+        cols.forEach((name, i) => {
+          obj[name] = row.c[i] ? (row.c[i].v ?? null) : null;
+        });
+        return obj;
       });
     }
 
-    const showFc = document.getElementById('showFc').checked;
-    const showBands = document.getElementById('showBands').checked;
-    if(showFc){
-      const fc = FC.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r.yhat!=null);
-      if(fc.length){
-        const fcX = fc.map(r=>r.date), fcY = fc.map(r=>r.yhat);
-        traces.push({
-          x: fcX, y: fcY, mode:"lines", line:{width:2,dash:"dash",color:'#ff6b6b'},
-          name:`${sym} - Proyección 30d`,
-          hovertemplate: "h=%{customdata} · %{x|%Y-%m-%d}<br>ŷ=%{y:.4f}<extra></extra>",
-          customdata: fc.map(r=>r.fc_h)
+    function coerceHistoricalRows(rows) {
+      const out = [];
+      for (const r of rows) {
+        const item = {
+          symbol: String(pick(r, ["symbol", "Symbol", "ticker", "BOL"]) || "").trim(),
+          date: parseGvizDate(pick(r, ["date", "Date", "fecha", "Fecha", "marca de diagnóstico"])),
+          open: num(pick(r, ["open", "Open"])),
+          high: num(pick(r, ["high", "High"])),
+          low: num(pick(r, ["low", "Low"])),
+          close: num(pick(r, ["close", "Close"])),
+          adj_close: num(pick(r, ["adj_close", "Adj Close", "adjclose"])),
+          volume: num(pick(r, ["volume", "Volume"])),
+          source: pick(r, ["source", "Source"]) || null,
+        };
+
+        if (!(item.date instanceof Date) || Number.isNaN(item.date.getTime())) continue;
+        if (!item.symbol) continue;
+        if ([item.open, item.high, item.low, item.close, item.adj_close].every((x) => x == null)) continue;
+
+        if (item.adj_close == null) item.adj_close = item.close;
+        if (item.close == null) item.close = item.adj_close;
+
+        out.push(item);
+      }
+
+      out.sort((a, b) => a.symbol.localeCompare(b.symbol) || (a.date - b.date));
+      return out;
+    }
+
+    function coerceForecastRows(rows) {
+      const out = [];
+      for (const r of rows) {
+        const item = {
+          symbol: String(pick(r, ["symbol", "Symbol", "ticker"]) || "").trim(),
+          date: parseGvizDate(pick(r, ["date", "Date", "fecha", "Fecha"])),
+          fc_h: num(pick(r, ["fc_h", "h", "horizon"])),
+          yhat: num(pick(r, ["yhat", "forecast", "pred"])),
+          yhat_lo: num(pick(r, ["yhat_lo", "lo", "lower"])),
+          yhat_hi: num(pick(r, ["yhat_hi", "hi", "upper"])),
+          last_obs_value: num(pick(r, ["last_obs_value", "last", "base"])),
+          method: pick(r, ["method", "model", "model_family"]) || null,
+        };
+
+        if (!(item.date instanceof Date) || Number.isNaN(item.date.getTime())) continue;
+        if (!item.symbol || item.yhat == null) continue;
+        out.push(item);
+      }
+      out.sort((a, b) => a.symbol.localeCompare(b.symbol) || (a.date - b.date) || ((a.fc_h || 0) - (b.fc_h || 0)));
+      return out;
+    }
+
+    function rollingMean(arr, k) {
+      if (k <= 1) return arr.slice();
+      const out = new Array(arr.length).fill(null);
+      const q = [];
+      let s = 0;
+      for (let i = 0; i < arr.length; i += 1) {
+        const v = arr[i] == null ? NaN : Number(arr[i]);
+        q.push(v);
+        s += v;
+        if (q.length > k) s -= q.shift();
+        if (q.length === k && Number.isFinite(s)) out[i] = s / k;
+      }
+      return out;
+    }
+
+    function formatNum(v, d = 2) {
+      if (v == null || Number.isNaN(v)) return "-";
+      return Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+    }
+
+    function formatPct(v, d = 2) {
+      if (v == null || Number.isNaN(v)) return "-";
+      const sign = v > 0 ? "+" : "";
+      return `${sign}${(v * 100).toFixed(d)}%`;
+    }
+
+    function computeReturns(values) {
+      const out = [];
+      for (let i = 1; i < values.length; i += 1) {
+        const a = values[i - 1];
+        const b = values[i];
+        out.push(a != null && b != null && a !== 0 ? (b / a) - 1 : null);
+      }
+      return out;
+    }
+
+    function mean(arr) {
+      const x = arr.filter((v) => v != null && Number.isFinite(v));
+      if (!x.length) return null;
+      return x.reduce((acc, v) => acc + v, 0) / x.length;
+    }
+
+    function std(arr) {
+      const x = arr.filter((v) => v != null && Number.isFinite(v));
+      if (x.length < 2) return null;
+      const m = mean(x);
+      const v = x.reduce((acc, y) => acc + ((y - m) ** 2), 0) / (x.length - 1);
+      return Math.sqrt(v);
+    }
+
+    function quantile(arr, q) {
+      const x = arr.filter((v) => v != null && Number.isFinite(v)).slice().sort((a, b) => a - b);
+      if (!x.length) return null;
+      const idx = Math.max(0, Math.min(x.length - 1, Math.floor(q * (x.length - 1))));
+      return x[idx];
+    }
+
+    function maxDrawdown(prices) {
+      let peak = -Infinity;
+      let dd = 0;
+      for (const p of prices) {
+        if (p == null || !Number.isFinite(p)) continue;
+        if (p > peak) peak = p;
+        if (peak > 0) dd = Math.max(dd, (peak - p) / peak);
+      }
+      return Number.isFinite(dd) ? dd : null;
+    }
+
+    function skewness(arr) {
+      const x = arr.filter((v) => v != null && Number.isFinite(v));
+      if (x.length < 3) return null;
+      const m = mean(x);
+      const s = std(x);
+      if (!s) return null;
+      return x.reduce((acc, y) => acc + (((y - m) / s) ** 3), 0) / x.length;
+    }
+
+    function kurtosisExcess(arr) {
+      const x = arr.filter((v) => v != null && Number.isFinite(v));
+      if (x.length < 4) return null;
+      const m = mean(x);
+      const s = std(x);
+      if (!s) return null;
+      return (x.reduce((acc, y) => acc + (((y - m) / s) ** 4), 0) / x.length) - 3;
+    }
+
+    function computeStats(records, metric) {
+      const values = records.map((r) => r[metric]).filter((v) => v != null && Number.isFinite(v));
+      if (!values.length) return {};
+
+      const sorted = values.slice().sort((a, b) => a - b);
+      const returns = computeReturns(values).filter((v) => v != null && Number.isFinite(v));
+
+      const m = mean(sorted);
+      const s = std(sorted);
+      const vol = std(returns);
+      const volA = vol == null ? null : vol * Math.sqrt(252);
+      const var95 = quantile(returns, 0.05);
+      const rf = 0.02;
+      const sharpe = (volA && volA !== 0) ? (((mean(returns) * 252) - rf) / volA) : null;
+      const mdd = maxDrawdown(values);
+
+      const y0 = values[0];
+      const yN = values[values.length - 1];
+      const cagr = (values.length > 1 && y0 > 0 && yN > 0)
+        ? (Math.pow(yN / y0, 252 / values.length) - 1)
+        : null;
+      const calmar = (cagr != null && mdd && mdd > 0) ? cagr / mdd : null;
+
+      return {
+        last: values[values.length - 1],
+        mean: m,
+        median: quantile(sorted, 0.5),
+        min: sorted[0],
+        max: sorted[sorted.length - 1],
+        std: s,
+        skew: skewness(sorted),
+        kurtosis: kurtosisExcess(sorted),
+        volatilityA: volA,
+        var95: var95 == null ? null : -var95,
+        sharpe,
+        maxDD: mdd,
+        cagr,
+        calmar,
+      };
+    }
+
+    function computeSeries(records, metric, mode, smooth) {
+      const x = records.map((r) => r.date);
+      const y0 = records.map((r) => r[metric]);
+      let y = y0.slice();
+
+      if (mode === "ret_d") {
+        y = y.map((v, i) => (i === 0 || v == null || y0[i - 1] == null || y0[i - 1] === 0) ? null : (v / y0[i - 1]) - 1);
+      }
+      if (mode === "ret_cum") {
+        let acc = 1;
+        y = y.map((v, i) => {
+          if (i === 0 || v == null || y0[i - 1] == null || y0[i - 1] === 0) return 0;
+          const r = (v / y0[i - 1]) - 1;
+          acc *= (1 + r);
+          return acc - 1;
         });
-        if(showBands){
-          const lo = fc.map(r=>r.yhat_lo), hi = fc.map(r=>r.yhat_hi);
+      }
+      if (Number(smooth) > 1 && mode === "level") y = rollingMean(y, Number(smooth));
+
+      return { x, y };
+    }
+
+    let DATA = [];
+    let FC = [];
+    let SYMBOLS = [];
+
+    const els = {
+      sheetUrl: document.getElementById("sheetUrl"),
+      fcUrl: document.getElementById("fcUrl"),
+      loadBtn: document.getElementById("loadBtn"),
+      symbol: document.getElementById("symbol"),
+      metric: document.getElementById("metric"),
+      retMode: document.getElementById("retMode"),
+      smooth: document.getElementById("smooth"),
+      dateFrom: document.getElementById("dateFrom"),
+      dateTo: document.getElementById("dateTo"),
+      showFc: document.getElementById("showFc"),
+      showBands: document.getElementById("showBands"),
+      logScale: document.getElementById("logScale"),
+      statusBox: document.getElementById("statusBox"),
+      statusSymbols: document.getElementById("statusSymbols"),
+      statusUpdated: document.getElementById("statusUpdated"),
+      kpiLast: document.getElementById("kpiLast"),
+      kpiMtd: document.getElementById("kpiMtd"),
+      kpiYtd: document.getElementById("kpiYtd"),
+      kpiVol: document.getElementById("kpiVol"),
+      kpiDd: document.getElementById("kpiDd"),
+      statsA: document.getElementById("statsA"),
+      statsB: document.getElementById("statsB"),
+      forecastBody: document.getElementById("forecastBody"),
+    };
+
+    function setStatus(msg, isError = false) {
+      els.statusBox.classList.toggle("error", isError);
+      els.statusBox.textContent = msg;
+    }
+
+    function currentSymbol() {
+      if (els.symbol.value) return els.symbol.value;
+      return SYMBOLS[0] || "";
+    }
+
+    function filteredHistorical() {
+      const sym = currentSymbol();
+      const metric = els.metric.value;
+      const from = els.dateFrom.value ? new Date(els.dateFrom.value) : new Date(0);
+      const to = els.dateTo.value ? new Date(els.dateTo.value) : new Date(8640000000000000);
+      return DATA.filter((r) => r.symbol === sym && r.date >= from && r.date <= to && r[metric] != null);
+    }
+
+    function updateKPIs(records, metric, stats) {
+      if (!records.length) {
+        els.kpiLast.textContent = "-";
+        els.kpiMtd.textContent = "-";
+        els.kpiYtd.textContent = "-";
+        els.kpiVol.textContent = "-";
+        els.kpiDd.textContent = "-";
+        return;
+      }
+
+      const lastRec = records[records.length - 1];
+      const d = lastRec.date;
+
+      const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const monthRows = records.filter((r) => r.date >= monthStart && r[metric] != null);
+      const mtd = monthRows.length >= 2 ? (monthRows[monthRows.length - 1][metric] / monthRows[0][metric]) - 1 : null;
+
+      const yearStart = new Date(d.getFullYear(), 0, 1);
+      const yearRows = records.filter((r) => r.date >= yearStart && r[metric] != null);
+      const ytd = yearRows.length >= 2 ? (yearRows[yearRows.length - 1][metric] / yearRows[0][metric]) - 1 : null;
+
+      els.kpiLast.textContent = `${formatNum(lastRec[metric])}`;
+      els.kpiMtd.textContent = formatPct(mtd);
+      els.kpiYtd.textContent = formatPct(ytd);
+      els.kpiVol.textContent = formatPct(stats.volatilityA);
+      els.kpiDd.textContent = formatPct(stats.maxDD);
+    }
+
+    function renderStats(stats) {
+      const rowsA = [
+        ["Media", formatNum(stats.mean)],
+        ["Mediana", formatNum(stats.median)],
+        ["Desv. estándar", formatNum(stats.std)],
+        ["Mínimo", formatNum(stats.min)],
+        ["Máximo", formatNum(stats.max)],
+        ["Asimetría", formatNum(stats.skew, 4)],
+        ["Curtosis (exceso)", formatNum(stats.kurtosis, 4)],
+      ];
+      const rowsB = [
+        ["Volatilidad anual", formatPct(stats.volatilityA)],
+        ["VaR 95% (1d)", formatPct(stats.var95)],
+        ["Sharpe (rf 2%)", formatNum(stats.sharpe, 3)],
+        ["CAGR", formatPct(stats.cagr)],
+        ["Max Drawdown", formatPct(stats.maxDD)],
+        ["Calmar", formatNum(stats.calmar, 3)],
+      ];
+
+      els.statsA.innerHTML = rowsA.map(([k, v]) => `<div class="stat-row"><span class="label">${k}</span><span class="val">${v}</span></div>`).join("");
+      els.statsB.innerHTML = rowsB.map(([k, v]) => `<div class="stat-row"><span class="label">${k}</span><span class="val">${v}</span></div>`).join("");
+    }
+
+    function renderMainChart(base) {
+      const sym = currentSymbol();
+      const metric = els.metric.value;
+      const mode = els.retMode.value;
+      const smooth = els.smooth.value;
+      const useLog = els.logScale.checked;
+      const showFc = els.showFc.checked;
+      const showBands = els.showBands.checked;
+
+      const { x, y } = computeSeries(base, metric, mode, smooth);
+      const traces = [];
+
+      traces.push({
+        x,
+        y,
+        mode: "lines",
+        name: "Histórico",
+        line: { width: 2.5, color: "#0f766e" },
+        hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.4f}<extra></extra>",
+      });
+
+      if (showFc && mode === "level") {
+        const from = els.dateFrom.value ? new Date(els.dateFrom.value) : new Date(0);
+        const to = els.dateTo.value ? new Date(els.dateTo.value) : new Date(8640000000000000);
+        const fc = FC.filter((r) => r.symbol === sym && r.date >= from && r.date <= to && r.yhat != null);
+
+        if (fc.length) {
+          const fcX = fc.map((r) => r.date);
+          const fcY = fc.map((r) => r.yhat);
           traces.push({
-            x: fcX.concat(fcX.slice().reverse()),
-            y: hi.concat(lo.slice().reverse()),
-            fill:"toself", fillcolor:"rgba(255,107,107,0.15)", line:{width:0},
-            name:"IC 95%", hoverinfo:"skip", showlegend:false
+            x: fcX,
+            y: fcY,
+            mode: "lines",
+            name: "Proyección",
+            line: { width: 2.4, dash: "dash", color: "#ea580c" },
+            customdata: fc.map((r) => r.fc_h),
+            hovertemplate: "h=%{customdata}<br>%{x|%Y-%m-%d}<br>ŷ=%{y:.4f}<extra></extra>",
           });
+
+          if (showBands) {
+            traces.push({
+              x: fcX.concat(fcX.slice().reverse()),
+              y: fc.map((r) => r.yhat_hi).concat(fc.map((r) => r.yhat_lo).reverse()),
+              fill: "toself",
+              fillcolor: "rgba(234,88,12,0.15)",
+              line: { width: 0 },
+              name: "IC95%",
+              hoverinfo: "skip",
+              showlegend: true,
+            });
+          }
         }
       }
-    }
 
-    const layout = {
-      margin:{l:60,r:20,t:40,b:40}, paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
-      xaxis:{showgrid:true,gridcolor:'rgba(128,128,128,0.2)',zeroline:false,title:"Fecha"},
-      yaxis:{showgrid:true,gridcolor:'rgba(128,128,128,0.2)',zeroline:false,type:logScale?'log':'linear',title: metric==='volume'?'Volumen':'Precio'},
-      legend:{orientation:"h",y:-0.2,x:0.5,xanchor:"center"}, hovermode:"closest"
-    };
-    Plotly.newPlot("chart", traces, layout, {displayModeBar:true, responsive:true});
-  }
-
-  function renderReturnsChart(){
-    const sym = elSymbol.value || (SYMBOLS[0] || "");
-    const metric = elMetric.value;
-    const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
-    const dTo   = elTo.value   ? new Date(elTo.value)   : new Date(8640000000000000);
-    const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
-    if(base.length<2) return;
-
-    const returns = computeReturnsSimple(base.map(r=>r[metric]));
-    const dates = base.slice(1).map(r=>r.date);
-    const trace = {x:dates, y:returns, type:'bar', name:'Retornos Diarios',
-                   marker:{color:returns.map(r=> r>=0 ? '#4caf50' : '#f44336')}};
-    const layout = {
-      margin:{l:60,r:20,t:40,b:40}, paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
-      xaxis:{showgrid:true,gridcolor:'rgba(128,128,128,0.2)',zeroline:false,title:"Fecha"},
-      yaxis:{showgrid:true,gridcolor:'rgba(128,128,128,0.2)',zeroline:false,tickformat:'.2%',title:"Retorno Diario"},
-      bargap:0.1
-    };
-    Plotly.newPlot("returnsChart",[trace],layout,{displayModeBar:true,responsive:true});
-  }
-
-  function renderDistributionChart(){
-    const sym = elSymbol.value || (SYMBOLS[0] || "");
-    const metric = elMetric.value;
-    const dFrom = elFrom.value ? new Date(elFrom.value) : new Date(0);
-    const dTo   = elTo.value   ? new Date(elTo.value)   : new Date(8640000000000000);
-    const base = DATA.filter(r=> r.symbol===sym && r.date>=dFrom && r.date<=dTo && r[metric]!=null);
-    if(base.length<2) return;
-
-    const returns = computeReturnsSimple(base.map(r=>r[metric])).filter(r=>r!=null);
-    const trace = {x:returns, type:'histogram', name:'Distribución de Retornos', nbinsx:30,
-                   marker:{color:'#3a86ff', line:{color:'rgba(0,0,0,0.2)', width:1}}, opacity:.7};
-    const layout = {
-      margin:{l:60,r:20,t:40,b:40}, paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
-      xaxis:{showgrid:true,gridcolor:'rgba(128,128,128,0.2)',zeroline:false,tickformat:'.2%',title:"Retorno Diario"},
-      yaxis:{showgrid:true,gridcolor:'rgba(128,128,128,0.2)',zeroline:false,title:"Frecuencia"},
-      bargap:0.05
-    };
-    Plotly.newPlot("distributionChart",[trace],layout,{displayModeBar:true,responsive:true});
-  }
-
-  function render(){ renderMainChart(); renderReturnsChart(); renderDistributionChart(); }
-
-  // === Carga de datos ===
-  async function load(){
-    showLoader();
-    try{
-      const histJson = await fetchGvizJSON(document.getElementById('sheetUrl').value);
-      const fcJson   = await fetchGvizJSON(document.getElementById('fcUrl').value);
-      const histRows = coerceHistoricalRows(gvizToObjects(histJson));
-      const fcRows   = coerceForecastRows(gvizToObjects(fcJson));
-      DATA = histRows; FC = fcRows;
-
-      SYMBOLS = Array.from(new Set([
-        ...histRows.map(r=>r.symbol).filter(Boolean),
-        ...fcRows.map(r=>r.symbol).filter(Boolean)
-      ])).sort();
-      elSymbol.innerHTML = SYMBOLS.map(s=>`<option value="${s}">${s}</option>`).join("");
-
-      const allDates = [...histRows.map(r=>r.date), ...fcRows.map(r=>r.date)].filter(d=>d instanceof Date);
-      if(allDates.length){
-        const maxDate = new Date(Math.max.apply(null, allDates));
-        const minDate = new Date(maxDate); minDate.setFullYear(minDate.getFullYear()-3);
-        document.getElementById('dateFrom').value = toISO(minDate);
-        document.getElementById('dateTo').value = toISO(maxDate);
-      }else{
-        document.getElementById('dateFrom').value = "1990-01-01";
-        document.getElementById('dateTo').value   = toISO(new Date());
-      }
-      // por defecto visualizamos adj_close que es la métrica de entrenamiento
-      elMetric.value = "adj_close";
-
-      render();
-      hideLoader();
-    }catch(e){
-      console.error(e);
-      showError(e.message || String(e));
-    }
-  }
-
-  // === Init ===
-  window.addEventListener("DOMContentLoaded", ()=>{
-    ["sheetUrl","fcUrl","symbol","metric","ret","smooth","dateFrom","dateTo","showFc","showBands","logScale"]
-      .map(id=>document.getElementById(id)).forEach(el=> el && el.addEventListener("change", render));
-    document.getElementById('loadDataBtn').addEventListener('click', load);
-    document.getElementById('refreshBtn').addEventListener('click', load);
-    document.querySelectorAll('.tab').forEach(tab=>{
-      tab.addEventListener('click', function(){
-        document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
-        this.classList.add('active');
-        const tabId = this.getAttribute('data-tab');
-        document.getElementById(tabId+'Tab').classList.add('active');
+      Plotly.newPlot("chartMain", traces, {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 60, r: 20, t: 10, b: 46 },
+        hovermode: "x unified",
+        xaxis: { title: "Fecha", gridcolor: "rgba(120,140,160,0.22)", zeroline: false },
+        yaxis: {
+          title: mode === "level" ? (metric === "volume" ? "Volumen" : "Nivel") : "Retorno",
+          tickformat: mode === "level" ? null : ".2%",
+          type: useLog && mode === "level" ? "log" : "linear",
+          gridcolor: "rgba(120,140,160,0.22)",
+          zeroline: false,
+        },
+        legend: { orientation: "h", y: -0.2, x: 0, xanchor: "left" },
+      }, {
+        responsive: true,
+        displaylogo: false,
       });
+    }
+
+    function renderReturnChart(base) {
+      const metric = els.metric.value;
+      if (base.length < 2) {
+        Plotly.purge("chartReturns");
+        return;
+      }
+      const returns = computeReturns(base.map((r) => r[metric]));
+      const dates = base.slice(1).map((r) => r.date);
+
+      Plotly.newPlot("chartReturns", [{
+        x: dates,
+        y: returns,
+        type: "bar",
+        marker: { color: returns.map((v) => (v != null && v >= 0 ? "#0f9d58" : "#c81e1e")) },
+        name: "Retornos",
+      }], {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 60, r: 20, t: 10, b: 46 },
+        xaxis: { title: "Fecha", gridcolor: "rgba(120,140,160,0.22)", zeroline: false },
+        yaxis: { title: "Retorno", tickformat: ".2%", gridcolor: "rgba(120,140,160,0.22)", zeroline: false },
+      }, { responsive: true, displaylogo: false });
+    }
+
+    function renderDistribution(base) {
+      const metric = els.metric.value;
+      if (base.length < 2) {
+        Plotly.purge("chartDist");
+        return;
+      }
+      const returns = computeReturns(base.map((r) => r[metric])).filter((v) => v != null);
+
+      Plotly.newPlot("chartDist", [{
+        x: returns,
+        type: "histogram",
+        nbinsx: 35,
+        marker: { color: "#155e75", line: { color: "#e2e8ef", width: 1 } },
+        opacity: 0.9,
+        name: "Distribución",
+      }], {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 60, r: 20, t: 10, b: 46 },
+        xaxis: { title: "Retorno", tickformat: ".2%", gridcolor: "rgba(120,140,160,0.22)", zeroline: false },
+        yaxis: { title: "Frecuencia", gridcolor: "rgba(120,140,160,0.22)", zeroline: false },
+      }, { responsive: true, displaylogo: false });
+    }
+
+    function renderForecastTable(base) {
+      const sym = currentSymbol();
+      const from = els.dateFrom.value ? new Date(els.dateFrom.value) : new Date(0);
+      const to = els.dateTo.value ? new Date(els.dateTo.value) : new Date(8640000000000000);
+      const fc = FC
+        .filter((r) => r.symbol === sym && r.date >= from && r.date <= to && r.yhat != null)
+        .sort((a, b) => (a.fc_h || 0) - (b.fc_h || 0))
+        .slice(0, 15);
+
+      const baseValue = base.length ? base[base.length - 1][els.metric.value] : null;
+
+      if (!fc.length) {
+        els.forecastBody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#5a6b7c;">No hay proyecciones disponibles para el filtro actual.</td></tr>`;
+        return;
+      }
+
+      els.forecastBody.innerHTML = fc.map((r) => {
+        const delta = (baseValue && baseValue !== 0) ? ((r.yhat / baseValue) - 1) : null;
+        return `
+          <tr>
+            <td>${toISO(r.date)}</td>
+            <td>${formatNum(r.fc_h, 0)}</td>
+            <td>${formatNum(r.yhat)}</td>
+            <td>${formatNum(r.yhat_lo)}</td>
+            <td>${formatNum(r.yhat_hi)}</td>
+            <td>${formatPct(delta)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderAll() {
+      const base = filteredHistorical();
+      const stats = computeStats(base, els.metric.value);
+      updateKPIs(base, els.metric.value, stats);
+      renderStats(stats);
+      renderMainChart(base);
+      renderReturnChart(base);
+      renderDistribution(base);
+      renderForecastTable(base);
+    }
+
+    async function loadData() {
+      setStatus("Cargando datos desde Google Sheets...");
+      els.loadBtn.disabled = true;
+      try {
+        const [histGviz, fcGviz] = await Promise.all([
+          fetchGvizJSON(els.sheetUrl.value),
+          fetchGvizJSON(els.fcUrl.value),
+        ]);
+
+        DATA = coerceHistoricalRows(gvizToObjects(histGviz));
+        FC = coerceForecastRows(gvizToObjects(fcGviz));
+
+        SYMBOLS = Array.from(new Set([
+          ...DATA.map((r) => r.symbol),
+          ...FC.map((r) => r.symbol),
+        ].filter(Boolean))).sort();
+
+        if (!SYMBOLS.length) throw new Error("No se encontraron símbolos válidos en las hojas.");
+
+        const selected = currentSymbol();
+        els.symbol.innerHTML = SYMBOLS.map((s) => `<option value="${s}">${s}</option>`).join("");
+        if (SYMBOLS.includes(selected)) {
+          els.symbol.value = selected;
+        }
+
+        const allDates = [...DATA.map((r) => r.date), ...FC.map((r) => r.date)].filter((d) => d instanceof Date);
+        if (allDates.length) {
+          const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
+          const minDate = new Date(maxDate);
+          minDate.setFullYear(minDate.getFullYear() - 3);
+          els.dateFrom.value = toISO(minDate);
+          els.dateTo.value = toISO(maxDate);
+        }
+
+        els.metric.value = "adj_close";
+        els.retMode.value = "level";
+
+        renderAll();
+
+        const now = new Date();
+        els.statusSymbols.textContent = `Símbolos: ${SYMBOLS.length}`;
+        els.statusUpdated.textContent = `Última carga: ${toISO(now)} ${now.toLocaleTimeString()}`;
+        setStatus(`Carga correcta. Históricos: ${DATA.length} filas, proyecciones: ${FC.length} filas.`);
+      } catch (err) {
+        console.error(err);
+        setStatus(`Error de carga: ${err.message || String(err)}`, true);
+      } finally {
+        els.loadBtn.disabled = false;
+      }
+    }
+
+    function wireTabs() {
+      const tabs = Array.from(document.querySelectorAll(".tab"));
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          tabs.forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          const key = tab.dataset.tab;
+          document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+          document.getElementById(`view-${key}`).classList.add("active");
+          window.dispatchEvent(new Event("resize"));
+        });
+      });
+    }
+
+    function wireInputs() {
+      ["symbol", "metric", "retMode", "smooth", "dateFrom", "dateTo", "showFc", "showBands", "logScale"]
+        .forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.addEventListener("change", renderAll);
+        });
+      els.loadBtn.addEventListener("click", loadData);
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      wireTabs();
+      wireInputs();
+      loadData();
     });
-    document.getElementById('themeToggle').addEventListener('click', function(){
-      document.body.classList.toggle('light-mode');
-      this.innerHTML = document.body.classList.contains('light-mode') ? '<i>☀️</i>' : '<i>🌙</i>';
-      render();
-    });
-    load();
-  });
-</script>
+  </script>
 </body>
 </html>

@@ -611,9 +611,15 @@ def merge_hist(existing: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
     existing = _coerce_hist_types(existing)
     incoming = _coerce_hist_types(incoming)
 
+    merged = pd.concat([existing, incoming], axis=0, ignore_index=True)
+    if "symbol" in merged.columns:
+        symbol_norm = merged["symbol"].astype("string").str.strip()
+        merged = merged.loc[symbol_norm.notna() & symbol_norm.ne("")]
+    if "date" in merged.columns:
+        merged = merged.loc[merged["date"].notna()]
+
     merged = (
-        pd.concat([existing, incoming], axis=0, ignore_index=True)
-        .sort_values(["symbol", "date", "ingestion_ts"], kind="mergesort")
+        merged.sort_values(["symbol", "date", "ingestion_ts"], kind="mergesort")
         .drop_duplicates(subset=["symbol", "date"], keep="last")
     )
     for col in _hist_columns():
@@ -628,9 +634,16 @@ def merge_forecast(existing: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFra
 
     # Conserva solo la última corrida por símbolo y horizonte (h=1..H),
     # evitando acumular bloques históricos de proyecciones obsoletas.
+    merged = pd.concat([existing, incoming], axis=0, ignore_index=True)
+    if "symbol" in merged.columns:
+        symbol_norm = merged["symbol"].astype("string").str.strip()
+        merged = merged.loc[symbol_norm.notna() & symbol_norm.ne("")]
+    for required in ["fc_h", "date"]:
+        if required in merged.columns:
+            merged = merged.loc[merged[required].notna()]
+
     merged = (
-        pd.concat([existing, incoming], axis=0, ignore_index=True)
-        .sort_values(["symbol", "fc_h", "date", "ingestion_ts"], kind="mergesort")
+        merged.sort_values(["symbol", "fc_h", "date", "ingestion_ts"], kind="mergesort")
         .drop_duplicates(subset=["symbol", "fc_h"], keep="last")
     )
     for col in _forecast_columns():

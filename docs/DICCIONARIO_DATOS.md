@@ -37,10 +37,70 @@
 | `ingestion_ts` | datetime UTC | Timestamp de ejecución. |
 | `run_id` | string | Identificador de corrida para trazabilidad. |
 
+## Hoja / archivo: `scraping_qa`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `symbol` | string | Símbolo evaluado. |
+| `source` | string | Fuente intentada (`stooq` o `yahoo`). |
+| `status` | string | Estado del intento (`ok`, `error`, `accepted`). |
+| `rows_raw` | int | Filas obtenidas en el intento/fuente. |
+| `latency_ms` | int | Tiempo del intento en milisegundos. |
+| `error` | string | Mensaje de error (si aplica). |
+| `attempt_started_utc` | datetime UTC | Inicio del intento. |
+| `attempt_ended_utc` | datetime UTC | Fin del intento. |
+| `series_start_date` | date | Inicio de cobertura final aceptada. |
+| `series_end_date` | date | Fin de cobertura final aceptada. |
+| `pct_missing_adj_close` | float | Proporción de faltantes en `adj_close`. |
+| `run_id` | string | Identificador de corrida. |
+| `ingestion_ts` | datetime UTC | Timestamp de corrida. |
+
+## Hoja / archivo: `sentimiento_features`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `symbol` | string | Símbolo del índice. |
+| `date` | date | Fecha de agregación diaria del sentimiento. |
+| `n_news` | int | Cantidad de titulares procesados ese día. |
+| `sent_mean` | float | Media del score de sentimiento diario. |
+| `sent_median` | float | Mediana del score diario. |
+| `sent_std` | float | Desvío del score diario. |
+| `sent_pos_ratio` | float | Proporción de titulares positivos. |
+| `sent_neg_ratio` | float | Proporción de titulares negativos. |
+| `last_headline_at` | datetime UTC | Hora del último titular del día. |
+| `extractor` | string | Versión del extractor/scoring de sentimiento. |
+| `run_id` | string | Identificador de corrida. |
+| `ingestion_ts` | datetime UTC | Timestamp de corrida. |
+
+## Hoja / archivo: `benchmark_modelos`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `symbol` | string | Símbolo evaluado. |
+| `model` | string | Modelo (`drift_mean`, `mlp_regressor`). |
+| `feature_set` | string | Set de features usado. |
+| `uses_sentiment` | bool | Indica si incluyó variables de sentimiento. |
+| `train_n` | int | Tamaño de muestra de entrenamiento. |
+| `test_n` | int | Tamaño de muestra de prueba. |
+| `mae` | float | Error absoluto medio. |
+| `rmse` | float | Raíz del error cuadrático medio. |
+| `mape` | float | Error porcentual absoluto medio. |
+| `directional_accuracy` | float | Precisión direccional del signo de retorno. |
+| `run_id` | string | Identificador de corrida. |
+| `ingestion_ts` | datetime UTC | Timestamp de corrida. |
+
 ## Artefactos locales
 Cada ejecución exporta en `outputs/latest/`:
 - `indices_historicos.csv`
 - `indices_historicos.parquet`
 - `proyecciones_30d.csv`
 - `proyecciones_30d.parquet`
+- `scraping_qa.csv`
+- `scraping_qa.parquet`
+- `sentimiento_noticias_raw.csv`
+- `sentimiento_noticias_raw.parquet`
+- `sentimiento_features.csv`
+- `sentimiento_features.parquet`
+- `benchmark_modelos.csv`
+- `benchmark_modelos.parquet`
 - `run_metadata.json`

@@ -7,3 +7,4 @@ gspread>=6.1,<7.0
 gspread-dataframe>=4.0,<5.0
 google-auth>=2.35,<3.0
 statsmodels>=0.14.4,<1.0
+scikit-learn>=1.5,<2.0

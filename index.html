@@ -376,7 +376,7 @@
         y reutilización de insumos en investigación, reporting y automatizaciones downstream.
       </p>
       <div class="hero-meta">
-        <span class="pill">Modelo: ARIMA log-retornos + fallback naive drift</span>
+        <span class="pill">Modelo: ARIMA + capa de sentimiento + benchmark ANN</span>
         <span class="pill" id="statusSymbols">Símbolos: -</span>
         <span class="pill" id="statusUpdated">Última carga: -</span>
       </div>
@@ -394,6 +394,18 @@
           <div>
             <label for="fcUrl">URL proyección (sheet=proyecciones_30d)</label>
             <input id="fcUrl" type="text" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=proyecciones_30d" />
+          </div>
+          <div>
+            <label for="qaUrl">URL calidad extracción (sheet=scraping_qa)</label>
+            <input id="qaUrl" type="text" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=scraping_qa" />
+          </div>
+          <div>
+            <label for="sentUrl">URL sentimiento (sheet=sentimiento_features)</label>
+            <input id="sentUrl" type="text" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=sentimiento_features" />
+          </div>
+          <div>
+            <label for="benchUrl">URL benchmark (sheet=benchmark_modelos)</label>
+            <input id="benchUrl" type="text" value="https://docs.google.com/spreadsheets/d/1UQCSPaCtBA_v8aTU1xL6W4xtDOl8PpaP-240gJtLn-0/gviz/tq?tqx=out:json&sheet=benchmark_modelos" />
           </div>
           <button id="loadBtn" class="btn">Cargar / Actualizar</button>
         </div>
@@ -466,6 +478,7 @@
           <button class="tab active" data-tab="charts">Series y Retornos</button>
           <button class="tab" data-tab="stats">Estadísticas</button>
           <button class="tab" data-tab="forecast">Tabla de Proyección</button>
+          <button class="tab" data-tab="research">Calidad & IA</button>
           <button class="tab" data-tab="method">Metodología</button>
         </section>
 
@@ -510,14 +523,57 @@
           </article>
         </section>
 
+        <section id="view-research" class="view">
+          <article class="card">
+            <h3>Sentimiento diario (media y cobertura)</h3>
+            <div id="chartSentiment" class="chart"></div>
+          </article>
+          <article class="card">
+            <h3>Benchmark de modelos (símbolo actual)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th>Features</th>
+                  <th>Usa sentimiento</th>
+                  <th>MAE</th>
+                  <th>RMSE</th>
+                  <th>MAPE</th>
+                  <th>Acc. direccional</th>
+                </tr>
+              </thead>
+              <tbody id="benchmarkBody"></tbody>
+            </table>
+          </article>
+          <article class="card">
+            <h3>Auditoría de extracción (últimos intentos)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Fuente</th>
+                  <th>Estado</th>
+                  <th>Filas</th>
+                  <th>Latencia (ms)</th>
+                  <th>Cobertura fin</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody id="qaBody"></tbody>
+            </table>
+          </article>
+        </section>
+
         <section id="view-method" class="view">
           <article class="card method">
             <h3>Metodología resumida</h3>
-            <p>El pipeline estima retornos logarítmicos sobre <code>adj_close</code> y aplica ARIMA(p,0,q) con selección por AICc. Cuando no hay suficiente historia o el ajuste no converge, usa un fallback naive-drift.</p>
+            <p>El pipeline combina tres capas: extracción auditable, pronóstico ARIMA de corto plazo y señales de sentimiento para benchmarking con ANN.</p>
             <ul>
               <li><strong>Modelo base:</strong> ARIMA en retornos logarítmicos con búsqueda en grilla para p y q.</li>
+              <li><strong>Auditoría de extracción:</strong> registro por fuente con latencia, errores y cobertura final por símbolo.</li>
               <li><strong>Robustez:</strong> winsorización al 1% de retornos para reducir sensibilidad a outliers extremos.</li>
               <li><strong>Bandas de confianza:</strong> reconstrucción al nivel por transformación log-normal con IC95% aproximado.</li>
+              <li><strong>Sentimiento:</strong> titulares RSS de mercado y scoring léxico diario por símbolo.</li>
+              <li><strong>Benchmark IA:</strong> comparación de <code>drift_mean</code> vs <code>MLPRegressor</code> con y sin sentimiento.</li>
               <li><strong>Trazabilidad:</strong> cada corrida incluye <code>run_id</code> e <code>ingestion_ts</code>.</li>
               <li><strong>Limitación importante:</strong> no modela explícitamente cambios de régimen ni feriados por mercado.</li>
             </ul>
@@ -546,7 +602,14 @@
     function parseGvizDate(val) {
       if (val == null) return null;
       if (val instanceof Date) return val;
-      if (typeof val === "number") return new Date(val);
+      if (typeof val === "number") {
+        // Google Sheets serial date (days since 1899-12-30) vs epoch ms.
+        if (val > 20000 && val < 100000) {
+          const base = new Date(Date.UTC(1899, 11, 30));
+          return new Date(base.getTime() + (val * 86400000));
+        }
+        return new Date(val);
+      }
       if (typeof val === "string") {
         const m = val.match(/^Date\((\d{4}),\s*(\d{1,2})(?:,\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?)?\)$/);
         if (m) {
@@ -642,6 +705,64 @@
         out.push(item);
       }
       out.sort((a, b) => a.symbol.localeCompare(b.symbol) || (a.date - b.date) || ((a.fc_h || 0) - (b.fc_h || 0)));
+      return out;
+    }
+
+    function coerceQARows(rows) {
+      const out = [];
+      for (const r of rows) {
+        const item = {
+          symbol: String(pick(r, ["symbol", "Symbol"]) || "").trim(),
+          source: String(pick(r, ["source", "Source"]) || "").trim(),
+          status: String(pick(r, ["status", "Status"]) || "").trim(),
+          rows_raw: num(pick(r, ["rows_raw", "rows"])),
+          latency_ms: num(pick(r, ["latency_ms", "latency"])),
+          error: String(pick(r, ["error", "Error"]) || "").trim(),
+          series_end_date: parseGvizDate(pick(r, ["series_end_date", "end_date", "series_end"])),
+          attempt_ended_utc: parseGvizDate(pick(r, ["attempt_ended_utc", "attempt_end", "ingestion_ts"])),
+        };
+        if (!item.symbol) continue;
+        out.push(item);
+      }
+      out.sort((a, b) => (b.attempt_ended_utc || 0) - (a.attempt_ended_utc || 0));
+      return out;
+    }
+
+    function coerceSentimentRows(rows) {
+      const out = [];
+      for (const r of rows) {
+        const item = {
+          symbol: String(pick(r, ["symbol", "Symbol"]) || "").trim(),
+          date: parseGvizDate(pick(r, ["date", "Date", "fecha"])),
+          n_news: num(pick(r, ["n_news", "news_n"])),
+          sent_mean: num(pick(r, ["sent_mean", "sentiment_mean"])),
+          sent_pos_ratio: num(pick(r, ["sent_pos_ratio", "pos_ratio"])),
+          sent_neg_ratio: num(pick(r, ["sent_neg_ratio", "neg_ratio"])),
+        };
+        if (!item.symbol || !(item.date instanceof Date)) continue;
+        out.push(item);
+      }
+      out.sort((a, b) => a.symbol.localeCompare(b.symbol) || (a.date - b.date));
+      return out;
+    }
+
+    function coerceBenchmarkRows(rows) {
+      const out = [];
+      for (const r of rows) {
+        const item = {
+          symbol: String(pick(r, ["symbol", "Symbol"]) || "").trim(),
+          model: String(pick(r, ["model", "Model"]) || "").trim(),
+          feature_set: String(pick(r, ["feature_set", "features"]) || "").trim(),
+          uses_sentiment: String(pick(r, ["uses_sentiment"]) || "").toLowerCase() === "true" || pick(r, ["uses_sentiment"]) === true,
+          mae: num(pick(r, ["mae", "MAE"])),
+          rmse: num(pick(r, ["rmse", "RMSE"])),
+          mape: num(pick(r, ["mape", "MAPE"])),
+          directional_accuracy: num(pick(r, ["directional_accuracy", "acc"])),
+        };
+        if (!item.symbol || !item.model) continue;
+        out.push(item);
+      }
+      out.sort((a, b) => a.symbol.localeCompare(b.symbol) || a.model.localeCompare(b.model));
       return out;
     }
 
@@ -796,11 +917,17 @@
 
     let DATA = [];
     let FC = [];
+    let QA = [];
+    let SENT = [];
+    let BENCH = [];
     let SYMBOLS = [];
 
     const els = {
       sheetUrl: document.getElementById("sheetUrl"),
       fcUrl: document.getElementById("fcUrl"),
+      qaUrl: document.getElementById("qaUrl"),
+      sentUrl: document.getElementById("sentUrl"),
+      benchUrl: document.getElementById("benchUrl"),
       loadBtn: document.getElementById("loadBtn"),
       symbol: document.getElementById("symbol"),
       metric: document.getElementById("metric"),
@@ -822,6 +949,8 @@
       statsA: document.getElementById("statsA"),
       statsB: document.getElementById("statsB"),
       forecastBody: document.getElementById("forecastBody"),
+      benchmarkBody: document.getElementById("benchmarkBody"),
+      qaBody: document.getElementById("qaBody"),
     };
 
     function setStatus(msg, isError = false) {
@@ -1046,6 +1175,83 @@
       }).join("");
     }
 
+    function renderSentimentChart() {
+      const sym = currentSymbol();
+      const rows = SENT.filter((r) => r.symbol === sym).sort((a, b) => a.date - b.date);
+      if (!rows.length) {
+        Plotly.purge("chartSentiment");
+        return;
+      }
+      const x = rows.map((r) => r.date);
+      const ySent = rows.map((r) => r.sent_mean);
+      const yNews = rows.map((r) => r.n_news);
+      Plotly.newPlot("chartSentiment", [
+        {
+          x,
+          y: ySent,
+          mode: "lines+markers",
+          name: "Sentimiento medio",
+          line: { width: 2, color: "#0b5f58" },
+          yaxis: "y1",
+        },
+        {
+          x,
+          y: yNews,
+          type: "bar",
+          name: "N noticias",
+          marker: { color: "rgba(234,88,12,0.35)" },
+          yaxis: "y2",
+        },
+      ], {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 60, r: 60, t: 10, b: 46 },
+        xaxis: { title: "Fecha", gridcolor: "rgba(120,140,160,0.22)" },
+        yaxis: { title: "Score", gridcolor: "rgba(120,140,160,0.22)", zeroline: false },
+        yaxis2: { title: "Noticias", overlaying: "y", side: "right", showgrid: false },
+        legend: { orientation: "h", y: -0.2, x: 0 },
+      }, { responsive: true, displaylogo: false });
+    }
+
+    function renderBenchmarkTable() {
+      const sym = currentSymbol();
+      const rows = BENCH.filter((r) => r.symbol === sym);
+      if (!rows.length) {
+        els.benchmarkBody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#5a6b7c;">Sin benchmark disponible para este símbolo.</td></tr>`;
+        return;
+      }
+      els.benchmarkBody.innerHTML = rows.map((r) => `
+        <tr>
+          <td>${r.model}</td>
+          <td>${r.feature_set || "-"}</td>
+          <td>${r.uses_sentiment ? "Sí" : "No"}</td>
+          <td>${formatNum(r.mae, 6)}</td>
+          <td>${formatNum(r.rmse, 6)}</td>
+          <td>${r.mape == null ? "-" : formatPct(r.mape)}</td>
+          <td>${r.directional_accuracy == null ? "-" : formatPct(r.directional_accuracy)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderQATable() {
+      const sym = currentSymbol();
+      const rows = QA.filter((r) => r.symbol === sym).slice(0, 12);
+      if (!rows.length) {
+        els.qaBody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#5a6b7c;">Sin registros de auditoría para este símbolo.</td></tr>`;
+        return;
+      }
+      els.qaBody.innerHTML = rows.map((r) => `
+        <tr>
+          <td>${r.source || "-"}</td>
+          <td>${r.status || "-"}</td>
+          <td>${formatNum(r.rows_raw, 0)}</td>
+          <td>${formatNum(r.latency_ms, 0)}</td>
+          <td>${r.series_end_date ? toISO(r.series_end_date) : "-"}</td>
+          <td>${r.error || "-"}</td>
+        </tr>
+      `).join("");
+    }
+
     function renderAll() {
       const base = filteredHistorical();
       const stats = computeStats(base, els.metric.value);
@@ -1055,19 +1261,28 @@
       renderReturnChart(base);
       renderDistribution(base);
       renderForecastTable(base);
+      renderSentimentChart();
+      renderBenchmarkTable();
+      renderQATable();
     }
 
     async function loadData() {
       setStatus("Cargando datos desde Google Sheets...");
       els.loadBtn.disabled = true;
       try {
-        const [histGviz, fcGviz] = await Promise.all([
+        const [histGviz, fcGviz, qaGviz, sentGviz, benchGviz] = await Promise.all([
           fetchGvizJSON(els.sheetUrl.value),
           fetchGvizJSON(els.fcUrl.value),
+          fetchGvizJSON(els.qaUrl.value).catch(() => null),
+          fetchGvizJSON(els.sentUrl.value).catch(() => null),
+          fetchGvizJSON(els.benchUrl.value).catch(() => null),
         ]);
 
         DATA = coerceHistoricalRows(gvizToObjects(histGviz));
         FC = coerceForecastRows(gvizToObjects(fcGviz));
+        QA = qaGviz ? coerceQARows(gvizToObjects(qaGviz)) : [];
+        SENT = sentGviz ? coerceSentimentRows(gvizToObjects(sentGviz)) : [];
+        BENCH = benchGviz ? coerceBenchmarkRows(gvizToObjects(benchGviz)) : [];
 
         SYMBOLS = Array.from(new Set([
           ...DATA.map((r) => r.symbol),
@@ -1121,7 +1336,10 @@
           }
         }
 
-        setStatus(`Carga correcta. Históricos: ${DATA.length} filas, proyecciones: ${FC.length} filas.`);
+        setStatus(
+          `Carga correcta. Históricos: ${DATA.length}, proyecciones: ${FC.length}, ` +
+          `auditoría: ${QA.length}, sentimiento: ${SENT.length}, benchmark: ${BENCH.length}.`
+        );
       } catch (err) {
         console.error(err);
         setStatus(`Error de carga: ${err.message || String(err)}`, true);

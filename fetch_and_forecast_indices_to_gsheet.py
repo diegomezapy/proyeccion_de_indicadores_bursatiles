@@ -240,7 +240,7 @@ def _yahoo_fetch(symbol: str, start_date: dt.date) -> pl.DataFrame | None:
 
     df = (
         df.with_columns([pl.lit(symbol).alias("symbol"), pl.lit("yahoo").alias("source")])
-        .select([c for c in ["symbol", "date", "open", "high", "low", "close", "adj_close", "volume", "source"] if c in df.columns])
+        .select(["symbol", "date", "open", "high", "low", "close", "adj_close", "volume", "source"])
     )
 
     price_any = pl.any_horizontal(

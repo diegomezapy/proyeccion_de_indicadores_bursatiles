@@ -311,6 +311,48 @@
 
     .method ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
 
+    .method-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .method-box {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .method-box h4 {
+      margin: 0;
+      font-size: 0.92rem;
+      color: var(--brand-2);
+    }
+
+    .formula {
+      margin: 0;
+      padding: 10px;
+      border: 1px dashed #bfd3e4;
+      border-radius: 10px;
+      background: #f6fbff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.86rem;
+      overflow: auto;
+      white-space: nowrap;
+    }
+
+    .ref-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+      color: var(--ink);
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -362,6 +404,7 @@
     @media (max-width: 780px) {
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .stats-grid { grid-template-columns: 1fr; }
+      .method-grid { grid-template-columns: 1fr; }
       .chart { height: 320px; }
       .row-2 { grid-template-columns: 1fr; }
     }
@@ -565,19 +608,87 @@
 
         <section id="view-method" class="view">
           <article class="card method">
-            <h3>Metodología resumida</h3>
-            <p>El pipeline combina tres capas: extracción auditable, pronóstico ARIMA de corto plazo y señales de sentimiento para benchmarking con ANN.</p>
-            <ul>
-              <li><strong>Modelo base:</strong> ARIMA en retornos logarítmicos con búsqueda en grilla para p y q.</li>
-              <li><strong>Auditoría de extracción:</strong> registro por fuente con latencia, errores y cobertura final por símbolo.</li>
-              <li><strong>Robustez:</strong> winsorización al 1% de retornos para reducir sensibilidad a outliers extremos.</li>
-              <li><strong>Bandas de confianza:</strong> reconstrucción al nivel por transformación log-normal con IC95% aproximado.</li>
-              <li><strong>Sentimiento:</strong> titulares RSS de mercado y scoring léxico diario por símbolo.</li>
-              <li><strong>Benchmark IA:</strong> comparación de <code>drift_mean</code> vs <code>MLPRegressor</code> con y sin sentimiento.</li>
-              <li><strong>Trazabilidad:</strong> cada corrida incluye <code>run_id</code> e <code>ingestion_ts</code>.</li>
-              <li><strong>Limitación importante:</strong> no modela explícitamente cambios de régimen ni feriados por mercado.</li>
-            </ul>
-            <p>Documentación completa: <code>docs/METODOLOGIA.md</code> y <code>docs/DICCIONARIO_DATOS.md</code>.</p>
+            <h3>Metodología Completa (Resumen Ejecutivo)</h3>
+            <p>
+              Esta aplicación sigue una metodología de investigación aplicada: integra extracción auditable de datos, modelado estadístico de series temporales y
+              comparación con modelos ANN para generar insumos reutilizables y trazables.
+            </p>
+
+            <div class="method-grid">
+              <div class="method-box">
+                <h4>1) Extracción y calidad</h4>
+                <ul>
+                  <li>Fuentes: Stooq (primaria) + Yahoo (fallback).</li>
+                  <li>Auditoría por intento: <code>status</code>, <code>latency_ms</code>, <code>rows_raw</code>, <code>error</code>.</li>
+                  <li>Cobertura aceptada: <code>series_start_date</code>, <code>series_end_date</code>, <code>pct_missing_adj_close</code>.</li>
+                </ul>
+              </div>
+
+              <div class="method-box">
+                <h4>2) Normalización de series</h4>
+                <ul>
+                  <li>Esquema canónico por símbolo/fecha.</li>
+                  <li>Coerción robusta de tipos y depuración de filas inválidas.</li>
+                  <li>Dedupe histórico por clave <code>(symbol, date)</code>.</li>
+                </ul>
+              </div>
+
+              <div class="method-box">
+                <h4>3) Proyección ARIMA</h4>
+                <ul>
+                  <li>Variable modelada: retornos logarítmicos de <code>adj_close</code>.</li>
+                  <li>Selección de orden por AICc en grilla ARIMA(p,0,q).</li>
+                  <li>Fallback <code>naive_drift_log</code> si no converge o hay muestra corta.</li>
+                </ul>
+                <p class="formula">r_t = log(P_t) - log(P_(t-1))</p>
+                <p class="formula">AICc = -2*llf + 2*k + (2*k*(k+1))/(n-k-1)</p>
+              </div>
+
+              <div class="method-box">
+                <h4>4) Intervalos y nivel</h4>
+                <ul>
+                  <li>Reconstrucción de nivel por transformación log-normal.</li>
+                  <li>Bandas de confianza 95% sobre retorno acumulado.</li>
+                </ul>
+                <p class="formula">P_hat_(t+h) = P_t * exp(E[S_h])</p>
+                <p class="formula">IC95 = P_t * exp(E[S_h] ± 1.96*sigma[S_h])</p>
+              </div>
+
+              <div class="method-box">
+                <h4>5) Sentimiento textual</h4>
+                <ul>
+                  <li>Fuente: Google News RSS.</li>
+                  <li>Scoring léxico financiero en titulares.</li>
+                  <li>Features diarias: <code>sent_mean</code>, <code>sent_std</code>, <code>n_news</code>.</li>
+                </ul>
+              </div>
+
+              <div class="method-box">
+                <h4>6) Benchmark IA</h4>
+                <ul>
+                  <li>Baseline: <code>drift_mean</code>.</li>
+                  <li>ANN: <code>MLPRegressor</code> con y sin sentimiento.</li>
+                  <li>Métricas: MAE, RMSE, MAPE, Directional Accuracy.</li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
+          <article class="card method">
+            <h3>Referencias Teóricas Clave</h3>
+            <ol class="ref-list">
+              <li>Box, Jenkins, Reinsel & Ljung (2015). <em>Time Series Analysis: Forecasting and Control</em>.</li>
+              <li>Hyndman & Athanasopoulos (2021). <em>Forecasting: Principles and Practice</em>.</li>
+              <li>Burnham & Anderson (2002). <em>Model Selection and Multimodel Inference</em>.</li>
+              <li>Hamilton (1994). <em>Time Series Analysis</em>.</li>
+              <li>Tsay (2010). <em>Analysis of Financial Time Series</em>.</li>
+              <li>Goodfellow, Bengio & Courville (2016). <em>Deep Learning</em>.</li>
+              <li>Hastie, Tibshirani & Friedman (2009). <em>The Elements of Statistical Learning</em>.</li>
+              <li>Loughran & McDonald (2011). Textual Analysis and Financial Language.</li>
+            </ol>
+            <p>
+              Documento detallado y formal del protocolo: <code>docs/METODOLOGIA.md</code>.
+            </p>
           </article>
         </section>
       </main>

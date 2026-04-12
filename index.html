@@ -309,6 +309,12 @@
       font-size: 0.95rem;
     }
 
+    .method h4 {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--brand-2);
+    }
+
     .method ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
 
     .method-grid {
@@ -351,6 +357,39 @@
       gap: 6px;
       font-size: 0.9rem;
       color: var(--ink);
+    }
+
+    .method-steps {
+      margin: 0;
+      padding-left: 20px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .method-kv {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 8px;
+      border-bottom: 1px dashed var(--line);
+      padding-bottom: 7px;
+      font-size: 0.92rem;
+    }
+
+    .method-kv:last-child { border-bottom: none; padding-bottom: 0; }
+    .method-kv .k { color: var(--muted); font-weight: 700; }
+
+    details.method-detail {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    details.method-detail > summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--ink);
+      margin: -2px 0 8px;
     }
 
     table {
@@ -608,87 +647,106 @@
 
         <section id="view-method" class="view">
           <article class="card method">
-            <h3>Metodología Completa (Resumen Ejecutivo)</h3>
+            <h3>Metodología Extensa, Replicable y Fundamentada</h3>
             <p>
-              Esta aplicación sigue una metodología de investigación aplicada: integra extracción auditable de datos, modelado estadístico de series temporales y
-              comparación con modelos ANN para generar insumos reutilizables y trazables.
+              Esta aplicación no es solo un tablero visual. Es un protocolo de investigación aplicada con diseño reproducible y trazabilidad técnica.
+              El objetivo es permitir que otro equipo replique exactamente la corrida, evalúe calidad de datos, compare modelos y reutilice los insumos
+              en estudios posteriores.
             </p>
+            <div class="method-kv"><span class="k">Propósito</span><span>Construir un pipeline robusto para extracción, depuración, pronóstico y evaluación comparativa con base estadística y de aprendizaje automático.</span></div>
+            <div class="method-kv"><span class="k">Pregunta operativa</span><span>¿Cómo se comporta un baseline estadístico frente a ARIMA y una ANN al incorporar señal de sentimiento sobre índices bursátiles?</span></div>
+            <div class="method-kv"><span class="k">Principio de diseño</span><span>Priorizar trazabilidad (<code>run_id</code>, <code>ingestion_ts</code>), control de calidad y comparabilidad de resultados entre corridas.</span></div>
+            <div class="method-kv"><span class="k">Capas</span><span>1) Extracción + QA, 2) Modelado ARIMA/fallback, 3) Sentimiento, 4) Benchmark ANN.</span></div>
+          </article>
 
+          <article class="card method">
+            <h3>Procedimiento Completo (End-to-End)</h3>
+            <ol class="method-steps">
+              <li><strong>Definir parámetros de ejecución:</strong> símbolos, fecha inicial, horizonte de proyección, grilla ARIMA (<code>max_p</code>, <code>max_q</code>), y capas activas.</li>
+              <li><strong>Extraer histórico por símbolo:</strong> primero Stooq; si falla o retorna vacío, fallback a Yahoo Finance.</li>
+              <li><strong>Registrar auditoría por intento:</strong> estado, latencia, error y cantidad de filas en <code>scraping_qa</code>.</li>
+              <li><strong>Normalizar esquema:</strong> coerción de tipos, validación de fecha, completitud mínima de precios, y deduplicación por <code>(symbol, date)</code>.</li>
+              <li><strong>Construir serie de retornos:</strong> usar <code>adj_close</code> y transformar a retornos logarítmicos.</li>
+              <li><strong>Seleccionar y ajustar ARIMA:</strong> búsqueda de orden óptimo por AICc; winsorización al 1% para robustez frente a outliers.</li>
+              <li><strong>Aplicar fallback si corresponde:</strong> <code>naive_drift_log</code> cuando no hay convergencia o muestra suficiente.</li>
+              <li><strong>Reconstruir nivel proyectado:</strong> transformar retorno acumulado a nivel y calcular banda IC95%.</li>
+              <li><strong>Construir sentimiento:</strong> extraer titulares RSS, puntuar léxicamente y agregar features diarias por símbolo.</li>
+              <li><strong>Evaluar benchmark:</strong> comparar baseline <code>drift_mean</code> vs <code>MLPRegressor</code> con y sin features de sentimiento.</li>
+              <li><strong>Publicar resultados:</strong> escribir hojas, exportar CSV/Parquet/JSON y registrar metadatos de corrida.</li>
+            </ol>
+          </article>
+
+          <article class="card method">
+            <h3>Formalización Matemática</h3>
             <div class="method-grid">
               <div class="method-box">
-                <h4>1) Extracción y calidad</h4>
-                <ul>
-                  <li>Fuentes: Stooq (primaria) + Yahoo (fallback).</li>
-                  <li>Auditoría por intento: <code>status</code>, <code>latency_ms</code>, <code>rows_raw</code>, <code>error</code>.</li>
-                  <li>Cobertura aceptada: <code>series_start_date</code>, <code>series_end_date</code>, <code>pct_missing_adj_close</code>.</li>
-                </ul>
-              </div>
-
-              <div class="method-box">
-                <h4>2) Normalización de series</h4>
-                <ul>
-                  <li>Esquema canónico por símbolo/fecha.</li>
-                  <li>Coerción robusta de tipos y depuración de filas inválidas.</li>
-                  <li>Dedupe histórico por clave <code>(symbol, date)</code>.</li>
-                </ul>
-              </div>
-
-              <div class="method-box">
-                <h4>3) Proyección ARIMA</h4>
-                <ul>
-                  <li>Variable modelada: retornos logarítmicos de <code>adj_close</code>.</li>
-                  <li>Selección de orden por AICc en grilla ARIMA(p,0,q).</li>
-                  <li>Fallback <code>naive_drift_log</code> si no converge o hay muestra corta.</li>
-                </ul>
+                <h4>Retorno logarítmico</h4>
                 <p class="formula">r_t = log(P_t) - log(P_(t-1))</p>
+                <p>Se modela la variación relativa de precios para mejorar estabilidad de escala frente a niveles absolutos.</p>
+              </div>
+              <div class="method-box">
+                <h4>Selección por AICc</h4>
                 <p class="formula">AICc = -2*llf + 2*k + (2*k*(k+1))/(n-k-1)</p>
+                <p>Se selecciona el modelo más parsimonioso con mejor balance entre ajuste y complejidad en muestra finita.</p>
               </div>
-
               <div class="method-box">
-                <h4>4) Intervalos y nivel</h4>
-                <ul>
-                  <li>Reconstrucción de nivel por transformación log-normal.</li>
-                  <li>Bandas de confianza 95% sobre retorno acumulado.</li>
-                </ul>
+                <h4>Proyección en nivel</h4>
                 <p class="formula">P_hat_(t+h) = P_t * exp(E[S_h])</p>
+                <p>Con <code>S_h</code> como retorno acumulado esperado hasta horizonte <code>h</code>.</p>
+              </div>
+              <div class="method-box">
+                <h4>Intervalo 95%</h4>
                 <p class="formula">IC95 = P_t * exp(E[S_h] ± 1.96*sigma[S_h])</p>
-              </div>
-
-              <div class="method-box">
-                <h4>5) Sentimiento textual</h4>
-                <ul>
-                  <li>Fuente: Google News RSS.</li>
-                  <li>Scoring léxico financiero en titulares.</li>
-                  <li>Features diarias: <code>sent_mean</code>, <code>sent_std</code>, <code>n_news</code>.</li>
-                </ul>
-              </div>
-
-              <div class="method-box">
-                <h4>6) Benchmark IA</h4>
-                <ul>
-                  <li>Baseline: <code>drift_mean</code>.</li>
-                  <li>ANN: <code>MLPRegressor</code> con y sin sentimiento.</li>
-                  <li>Métricas: MAE, RMSE, MAPE, Directional Accuracy.</li>
-                </ul>
+                <p>Se utiliza aproximación gaussiana del retorno acumulado y mapeo log-normal a precio.</p>
               </div>
             </div>
           </article>
 
           <article class="card method">
-            <h3>Referencias Teóricas Clave</h3>
+            <h3>Criterios de Calidad y Replicabilidad</h3>
+            <details class="method-detail" open>
+              <summary>Control de calidad de datos</summary>
+              <ul>
+                <li>Verificar presencia de estado <code>accepted</code> por símbolo.</li>
+                <li>Validar <code>series_end_date</code> y rezago respecto a fecha actual.</li>
+                <li>Revisar <code>pct_missing_adj_close</code> y eventos de error por fuente.</li>
+                <li>Confirmar coherencia de filas entre históricos, proyecciones y metadatos.</li>
+              </ul>
+            </details>
+            <details class="method-detail" open>
+              <summary>Validez de evaluación de modelos</summary>
+              <ul>
+                <li>Partición temporal train/test sin barajado para evitar leakage.</li>
+                <li>Comparación obligatoria contra baseline antes de interpretar ANN.</li>
+                <li>Reporte conjunto de MAE, RMSE, MAPE y Accuracy direccional.</li>
+                <li>Controlar sensibilidad a régimen de mercado y a cobertura de sentimiento.</li>
+              </ul>
+            </details>
+            <details class="method-detail" open>
+              <summary>Checklist de replicación</summary>
+              <ol class="method-steps">
+                <li>Instalar dependencias: <code>pip install -r requirements.txt</code>.</li>
+                <li>Configurar credenciales (<code>GOOGLE_APPLICATION_CREDENTIALS</code> o equivalentes).</li>
+                <li>Ejecutar pipeline con parámetros explícitos de corrida.</li>
+                <li>Guardar <code>run_id</code>, commit y fecha de ejecución en reporte técnico.</li>
+                <li>Repetir evaluación en ventana temporal equivalente para comparabilidad.</li>
+              </ol>
+            </details>
+          </article>
+
+          <article class="card method">
+            <h3>Fundamento Teórico y Referencias</h3>
             <ol class="ref-list">
-              <li>Box, Jenkins, Reinsel & Ljung (2015). <em>Time Series Analysis: Forecasting and Control</em>.</li>
-              <li>Hyndman & Athanasopoulos (2021). <em>Forecasting: Principles and Practice</em>.</li>
-              <li>Burnham & Anderson (2002). <em>Model Selection and Multimodel Inference</em>.</li>
+              <li>Box, Jenkins, Reinsel &amp; Ljung (2015). <em>Time Series Analysis: Forecasting and Control</em>.</li>
+              <li>Hyndman &amp; Athanasopoulos (2021). <em>Forecasting: Principles and Practice</em>.</li>
+              <li>Burnham &amp; Anderson (2002). <em>Model Selection and Multimodel Inference</em>.</li>
               <li>Hamilton (1994). <em>Time Series Analysis</em>.</li>
               <li>Tsay (2010). <em>Analysis of Financial Time Series</em>.</li>
-              <li>Goodfellow, Bengio & Courville (2016). <em>Deep Learning</em>.</li>
-              <li>Hastie, Tibshirani & Friedman (2009). <em>The Elements of Statistical Learning</em>.</li>
-              <li>Loughran & McDonald (2011). Textual Analysis and Financial Language.</li>
+              <li>Goodfellow, Bengio &amp; Courville (2016). <em>Deep Learning</em>.</li>
+              <li>Hastie, Tibshirani &amp; Friedman (2009). <em>The Elements of Statistical Learning</em>.</li>
+              <li>Loughran &amp; McDonald (2011). Textual Analysis and Financial Language in Finance.</li>
             </ol>
-            <p>
-              Documento detallado y formal del protocolo: <code>docs/METODOLOGIA.md</code>.
-            </p>
+            <p>Versión formal y exhaustiva del marco metodológico: <code>docs/METODOLOGIA.md</code>.</p>
           </article>
         </section>
       </main>

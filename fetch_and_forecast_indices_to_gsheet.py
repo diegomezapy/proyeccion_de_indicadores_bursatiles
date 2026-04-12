@@ -626,10 +626,12 @@ def merge_forecast(existing: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFra
     existing = _coerce_fc_types(existing)
     incoming = _coerce_fc_types(incoming)
 
+    # Conserva solo la última corrida por símbolo y horizonte (h=1..H),
+    # evitando acumular bloques históricos de proyecciones obsoletas.
     merged = (
         pd.concat([existing, incoming], axis=0, ignore_index=True)
-        .sort_values(["symbol", "date", "fc_h", "ingestion_ts"], kind="mergesort")
-        .drop_duplicates(subset=["symbol", "date", "fc_h"], keep="last")
+        .sort_values(["symbol", "fc_h", "date", "ingestion_ts"], kind="mergesort")
+        .drop_duplicates(subset=["symbol", "fc_h"], keep="last")
     )
     for col in _forecast_columns():
         if col not in merged.columns:
@@ -734,6 +736,11 @@ def run_pipeline(config: AppConfig) -> None:
         .reset_index()
         .to_dict(orient="records")
     )
+    for row in symbol_coverage:
+        for key in ("start_date", "end_date"):
+            val = row.get(key)
+            if isinstance(val, (dt.date, dt.datetime)):
+                row[key] = val.isoformat()
 
     metadata = {
         "run_id": run_id,

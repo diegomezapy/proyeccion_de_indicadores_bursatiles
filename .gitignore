@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+
+# Generated outputs
+outputs/
+
+# Local credentials (never commit)
+creds/*.json
+rapy-*.json
+*service-account*.json

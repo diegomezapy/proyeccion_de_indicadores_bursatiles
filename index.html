@@ -88,9 +88,13 @@
 
     .grid {
       display: grid;
-      grid-template-columns: 340px 1fr;
+      grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
       gap: 18px;
       align-items: start;
+    }
+
+    .grid > * {
+      min-width: 0;
     }
 
     .panel {
@@ -103,6 +107,9 @@
     .side {
       position: sticky;
       top: 16px;
+      align-self: start;
+      max-height: calc(100vh - 32px);
+      overflow: auto;
       padding: 16px;
       display: grid;
       gap: 16px;
@@ -186,6 +193,7 @@
       padding: 16px;
       display: grid;
       gap: 14px;
+      min-width: 0;
     }
 
     .kpis {
@@ -345,10 +353,10 @@
       color: #8c2323;
     }
 
-    @media (max-width: 1200px) {
+    @media (max-width: 1260px) {
       .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .grid { grid-template-columns: 1fr; }
-      .side { position: static; }
+      .side { position: static; max-height: none; overflow: visible; }
     }
 
     @media (max-width: 780px) {
@@ -361,7 +369,7 @@
 </head>
 <body>
   <div class="wrap">
-    <section class="hero panel">
+    <section class="hero">
       <h1>Monitor de Índices Bursátiles y Proyección de Corto Plazo</h1>
       <p>
         Tablero de lectura directa desde Google Sheets (GViz JSON). Diseñado para trazabilidad metodológica
@@ -1075,12 +1083,20 @@
         }
 
         const allDates = [...DATA.map((r) => r.date), ...FC.map((r) => r.date)].filter((d) => d instanceof Date);
+        const histDates = DATA.map((r) => r.date).filter((d) => d instanceof Date);
+        let histMaxDate = null;
+        if (histDates.length) {
+          histMaxDate = new Date(Math.max(...histDates.map((d) => d.getTime())));
+        }
+
         if (allDates.length) {
           const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-          const minDate = new Date(maxDate);
+          const today = new Date();
+          const defaultTo = today > maxDate ? today : maxDate;
+          const minDate = new Date(defaultTo);
           minDate.setFullYear(minDate.getFullYear() - 3);
           els.dateFrom.value = toISO(minDate);
-          els.dateTo.value = toISO(maxDate);
+          els.dateTo.value = toISO(defaultTo);
         }
 
         els.metric.value = "adj_close";
@@ -1091,6 +1107,20 @@
         const now = new Date();
         els.statusSymbols.textContent = `Símbolos: ${SYMBOLS.length}`;
         els.statusUpdated.textContent = `Última carga: ${toISO(now)} ${now.toLocaleTimeString()}`;
+
+        if (histMaxDate) {
+          const staleDays = Math.floor((now.getTime() - histMaxDate.getTime()) / 86400000);
+          if (staleDays > 5) {
+            setStatus(
+              `Carga correcta, pero con histórico desactualizado: última fecha disponible ${toISO(histMaxDate)} ` +
+              `(${staleDays} días de rezago respecto a ${toISO(now)}). ` +
+              `Ejecuta el pipeline para refrescar datos hasta hoy.`,
+              true
+            );
+            return;
+          }
+        }
+
         setStatus(`Carga correcta. Históricos: ${DATA.length} filas, proyecciones: ${FC.length} filas.`);
       } catch (err) {
         console.error(err);
